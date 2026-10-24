@@ -190,6 +190,12 @@
             .every((key) => plan.tasks.some((entry) => entry.key === key && entry.mandatory))
           && active.filter((entry) => T.planner.isNewTask(entry.key, child, [])).length <= 1
           && active.filter((entry) => T.tasks.get(entry.key).jump).length <= 1
+          && !active.some((entry, index) => {
+            if (!index || child.canStand === false) return false;
+            const previous = T.tasks.get(active[index - 1].key);
+            const task = T.tasks.get(entry.key);
+            return previous.gross && previous.needs.standing && task.gross && task.needs.standing;
+          })
           && T.tasks.all().every((task) => Math.max(task.durationSec.full, task.durationSec.short) <= 120);
       });
     });
