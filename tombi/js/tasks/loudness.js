@@ -30,7 +30,7 @@ T.tasks.register({
     const one = async (who) => {
       const element = box.querySelector('#' + who);
       box.querySelectorAll('.loud-animal').forEach((animal) => animal.classList.toggle('is-on', animal === element));
-      const bar = element.querySelector('.meter i'), label = animals.find(([id]) => id === who)[2];
+      const bar = element.querySelector('.meter i'), label = animals.find(([id]) => id === who)[1];
       const txt = params.holdSeconds
         ? `${ctx.nonverbal ? `${ctx.G('תעשה', 'תעשי')} קול` : `${ctx.G('תגיד', 'תגידי')} שלום`} כמו ${label}, וה${ctx.G('חזק', 'חזקה')} אותו יציב במשך שתי שניות`
         : who === 'cat'
