@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#0d1d2d">
+  <meta name="description" content="מרחב ההורים של טומבי — משחקים בבית ועוקבים יחד אחר ההתקדמות.">
+  <title>טומבי בבית</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap">
+  <link rel="stylesheet" href="css/cloud-sync.css?v=parent-portal-5">
+  <script src="https://www.gstatic.com/firebasejs/13.0.0/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/13.0.0/firebase-auth-compat.js" defer></script>
+</head>
+<body class="parent-portal">
+  <main class="parent-portal__layout">
+    <header class="parent-brand" aria-label="Ocupa">
+      <span dir="ltr">ocupa</span>
+      <img src="assets/ocupa-mark-outline.svg?v=1" alt="">
+    </header>
+    <section class="parent-portal__card" aria-labelledby="parent-title">
+      <div class="parent-portal__hero">
+        <div class="parent-portal__intro">
+          <p class="parent-portal__eyebrow">המרחב המשפחתי של טומבי</p>
+          <h1 id="parent-title">משחקים, מתקדמים ומשתפים את הצוות</h1>
+          <p id="parent-preview-badge" class="parent-preview-badge" hidden>תצוגה בלבד · נתוני דוגמה סינתטיים</p>
+          <p id="parent-message" class="parent-message" aria-live="polite">
+            התחברו לחשבון Google שהוזמן כדי לקשר את הילד/ה ולצפות במפגשים.
+          </p>
+          <button id="parent-login" class="parent-button" type="button">התחברות מאובטחת עם Google</button>
+        </div>
+        <div class="parent-portal__character">
+          <img src="assets/ocupa-tombi-cutout.png" alt="" class="parent-portal__tombi">
+        </div>
+      </div>
+      <div class="parent-portal__content">
+        <section id="parent-children" class="parent-children" aria-label="הילדים והמפגשים" hidden></section>
+        <button id="parent-logout" class="parent-logout" type="button" hidden>יציאה מהחשבון</button>
+        <p class="parent-privacy">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/></svg>
+          ההזמנה מיועדת לכתובת הדוא״ל שהוזמנה. המפגשים נשמרים במכשיר גם אם החיבור מתנתק, ומסתנכרנים כשאפשר.
+        </p>
+      </div>
+    </section>
+    <p class="parent-portal__footer">צעד קטן בכל פעם — ביחד עם טומבי</p>
+  </main>
+  <script src="js/cloud-config.js"></script>
+  <script src="js/cloud-auth.js"></script>
+  <script src="js/parent.js"></script>
+</body>
+</html>

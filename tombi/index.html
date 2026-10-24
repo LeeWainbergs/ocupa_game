@@ -8,8 +8,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&family=Fredoka:wght@500;600;700&family=Rubik:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/cloud-sync.css">
+<script src="https://www.gstatic.com/firebasejs/13.0.0/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/13.0.0/firebase-auth-compat.js" defer></script>
 </head>
 <body>
+<div id="parent-sync-banner" class="parent-sync-banner" role="status" aria-live="polite" hidden></div>
 <div id="app">
   <div id="adult-shell" class="adult-shell">
     <aside class="app-sidebar" id="app-sidebar" aria-label="ניווט ראשי">
@@ -298,6 +302,8 @@
       <button class="back" data-go="home" type="button">חזרה</button>
       <h1>הגדרות</h1>
 
+      <section id="cloud-sync-panel" class="cloud-sync-panel" aria-labelledby="cloud-sync-title"></section>
+
       <h2>הקול של טומבי</h2>
       <div class="form">
         <label>קול עברי <select id="s-voice"></select></label>
@@ -384,6 +390,9 @@
 <script src="js/planner.js"></script>
 <script src="js/stages.js"></script>
 <script src="js/report.js"></script>
+<script src="js/cloud-config.js"></script>
+<script src="js/cloud-auth.js"></script>
+<script src="js/cloud-sync.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
