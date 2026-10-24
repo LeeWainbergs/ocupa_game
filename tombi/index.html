@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>טומבי</title>
+<link rel="icon" type="image/svg+xml" href="assets/ocupa-mark.svg?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&family=Fredoka:wght@500;600;700&family=Rubik:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <div id="adult-shell" class="adult-shell">
+    <aside class="app-sidebar" id="app-sidebar" aria-label="ניווט ראשי">
+      <div class="ocupa-logo" aria-label="Ocupa">
+        <svg class="ocupa-mark" viewBox="0 0 42 42" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="2" y="21" width="19" height="19"/><circle cx="31" cy="30.5" r="9.5"/><path d="M21 2 L31 20 L11 20 Z"/></g></svg>
+        <span class="ocupa-word" dir="ltr">ocupa</span>
+      </div>
+      <button class="sidebar-new" id="btn-new-session" type="button"><span>מפגש חדש</span><b>+</b></button>
+      <nav class="sidebar-nav">
+        <button class="nav-item is-active" data-nav="home" type="button" aria-current="page"><img class="sidebar-tombi" src="assets/ocupa-tombi-cutout.png" alt=""><span>טומבי</span><span class="nav-pill">מפגש</span></button>
+        <button class="nav-item" data-nav="children" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/></svg><span>הילדים</span><span class="nav-count" id="nav-child-count"></span></button>
+        <button class="nav-item" data-nav="reports" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg><span>דוחות</span></button>
+        <button class="nav-item" data-nav="settings" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5v.2a2 2 0 1 1-4 0V19a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3A1.7 1.7 0 0 0 10 3.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l-.1-.1a2 2 0 1 1 2.8 2.8l.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1h.2a2 2 0 1 1 0 4H22a1.7 1.7 0 0 0-1.5 1.1 2 2 0 0 0-1.1.1Z"/></svg><span>הגדרות</span></button>
+      </nav>
+    </aside>
+    <button id="sidebar-scrim" class="sidebar-scrim" type="button" aria-label="סגירת התפריט" hidden></button>
+    <div class="adult-main">
+      <div class="mobile-navbar">
+        <button class="menu-toggle" id="btn-menu-toggle" type="button" aria-label="פתיחת תפריט" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+        <span class="mobile-brand" aria-label="Ocupa">
+          <svg class="ocupa-mark" viewBox="0 0 42 42" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="2" y="21" width="19" height="19"/><circle cx="31" cy="30.5" r="9.5"/><path d="M21 2 L31 20 L11 20 Z"/></g></svg>
+          <span class="ocupa-word" dir="ltr">ocupa</span>
+        </span>
+      </div>
+      <header class="adult-topbar">
+        <div class="breadcrumb" id="adult-breadcrumb"><span>Ocupa</span><i>‹</i><b>טומבי</b></div>
+        <div class="top-actions" id="adult-top-actions">
+          <button class="adult-icon-btn" id="btn-help" type="button" aria-label="עזרה" title="עזרה">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01"/></svg>
+          </button>
+        </div>
+      </header>
+      <div class="adult-content">
+
+  <!-- ===== Home ===== -->
+  <section id="screen-home" class="screen paper">
+    <div class="home-wrap">
+      <header class="topbar">
+        <div class="logo">
+          <img class="hero-tombi" src="assets/ocupa-tombi-cutout.png" alt="טומבי הדרקון">
+          <b>טומבי</b>
+          <small>אווטאר טיפולי מונחה פעילויות · גילאי 3–6</small>
+        </div>
+        <div class="top-actions">
+          <button class="icon-btn" id="btn-home-backup" type="button" aria-label="הורדת גיבוי" title="הורדת גיבוי">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-settings" type="button" aria-label="הגדרות" title="הגדרות">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5v.2a2 2 0 1 1-4 0V19a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3A1.7 1.7 0 0 0 10 3.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1h.2a2 2 0 1 1 0 4H22a1.7 1.7 0 0 0-1.5 1.1 1.7 1.7 0 0 0-1.1.1Z"/></svg>
+          </button>
+        </div>
+      </header>
+      <section class="greeting-banner" aria-labelledby="home-hero-title">
+        <div class="greeting-copy">
+          <p class="home-date" id="home-date"></p>
+          <h1 id="home-hero-title">מי נפגש היום עם טומבי?</h1>
+          <div class="home-actions">
+            <button class="btn hero-primary" id="btn-continue-child" type="button" hidden>
+              <span id="continue-child-label"></span>
+            </button>
+            <button class="btn hero-secondary" id="btn-add-child" type="button">ילד חדש</button>
+          </div>
+        </div>
+        <img class="hero-tombi" src="assets/ocupa-tombi-cutout.png" alt="טומבי הדרקון">
+      </section>
+      <section class="stats" id="home-stats" aria-label="נתוני פעילות" hidden></section>
+      <section class="bar section-bar" id="home-children-section">
+        <h2><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/></svg>הילדים <span id="home-child-count"></span></h2>
+        <div class="tools" id="home-tools" hidden>
+          <label class="search">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="home-search" type="search" placeholder="חיפוש ילד…" aria-label="חיפוש ילד">
+          </label>
+          <div class="sort-control" role="group" aria-label="סדר הילדים">
+            <button type="button" data-sort="recent">אחרונים</button>
+            <button type="button" data-sort="name">א–ב</button>
+            <button type="button" data-sort="needed">צריך מפגש</button>
+          </div>
+        </div>
+      </section>
+      <section id="children" class="children-grid" aria-live="polite"></section>
+    </div>
+  </section>
+
+  <!-- ===== Child form ===== -->
+  <section id="screen-child" class="screen paper" hidden>
+    <div class="wrap narrow">
+      <button class="back" data-go="home" type="button">חזרה</button>
+      <h1 id="child-form-title">ילד חדש</h1>
+      <form id="child-form" class="form">
+        <label>שם <input id="f-name" name="name" required maxlength="30" autocomplete="off"></label>
+        <div class="two">
+          <label>גיל
+            <select id="f-age" name="age"><option>3</option><option>4</option><option selected>5</option><option>6</option><option>7</option></select>
+          </label>
+          <fieldset class="seg"><legend>טומבי פונה אל</legend>
+            <label><input type="radio" name="gender" value="m" checked> בן</label>
+            <label><input type="radio" name="gender" value="f"> בת</label>
+          </fieldset>
+        </div>
+        <label class="check"><input type="checkbox" id="f-nonverbal" name="nonverbal"> מסלול ללא מילים: מחיאות כפיים, כל צליל נחשב, והצבעה על תמונות</label>
+        <fieldset class="child-capabilities"><legend>התאמות לתנועה ולצליל</legend>
+          <label class="check"><input type="checkbox" id="f-can-jump" checked> יכול/ה לקפוץ</label>
+          <label class="check"><input type="checkbox" id="f-can-stand" checked> יכול/ה לעמוד</label>
+          <label class="check"><input type="checkbox" id="f-sound-sensitive"> רגישות לצלילים</label>
+          <div id="child-task-exclusions"></div>
+        </fieldset>
+        <section id="child-goal-section" class="goal-editor" aria-labelledby="child-goal-title">
+          <h2 id="child-goal-title">מטרות טיפוליות</h2>
+          <p class="hint">בחרי מטרות שאושרו על ידי אשת/איש מקצוע. טומבי יציג מדדים והצעות בלבד; הוא לא קובע אבחנה ולא משנה מטרות בעצמו.</p>
+          <div id="child-goals"></div>
+        </section>
+        <section id="child-levels" class="level-settings" hidden aria-labelledby="child-levels-title">
+          <h2 id="child-levels-title">רמת קושי</h2>
+          <p class="hint">אפשר לקבוע שלב לכל משימה או לנעול אותו כדי שלא ישתנה אוטומטית.</p>
+          <div id="child-level-controls"></div>
+        </section>
+        <div class="row">
+          <button class="btn" type="submit">שמירה</button>
+          <button class="btn btn-danger" id="btn-del-child" type="button" hidden>מחיקת הילד וכל המפגשים</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- ===== Prep: microphone, calibration, words ===== -->
+  <section id="screen-prep" class="screen paper" hidden>
+    <div class="wrap narrow">
+      <button class="back" data-go="home" type="button">חזרה</button>
+      <h1>הכנה למפגש עם <span id="prep-name"></span></h1>
+      <section id="session-plan" class="oc-plan" aria-labelledby="session-plan-title">
+        <header><h2 id="session-plan-title">תוכנית המפגש</h2><button class="btn btn-ghost btn-small" id="plan-rebuild" type="button">תכנון מחדש</button></header>
+        <section id="plan-goal-summary" class="goal-plan-summary" hidden aria-live="polite"></section>
+        <div id="plan-items"></div>
+        <p id="plan-warning" class="warn" role="status" hidden></p>
+        <label id="plan-approval-row" class="check plan-approval" hidden>
+          <input id="plan-approved" type="checkbox"> בדקתי ואישרתי את תוכנית המפגש ביחס למטרות הילד
+        </label>
+        <div class="oc-plan-settings">
+          <label>חדר <select id="plan-room"><option value="clinic">קליניקה</option><option value="home">בית</option><option value="kindergarten">גן</option></select></label>
+          <label>משך <select id="plan-budget"><option value="6">6 דקות</option><option value="9">9 דקות</option><option value="12">12 דקות</option></select></label>
+          <label class="check"><input id="plan-hard-floor" type="checkbox" checked> רצפה קשה</label>
+          <label class="check"><input id="plan-space" type="checkbox" checked> מקום פנוי 1.5 מ׳</label>
+          <label class="check"><input id="plan-pot" type="checkbox" checked> סיר ושולחן</label>
+          <label class="check"><input id="plan-ball" type="checkbox" checked> כדור</label>
+          <label class="check"><input id="plan-quiet" type="checkbox" checked> חדר שקט</label>
+        </div>
+        <div id="plan-progress" class="plan-progress" role="progressbar" aria-label="זמן משוער ביחס לתקציב" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="0% מהתקציב">
+          <span id="plan-progress-fill"></span>
+        </div>
+        <p class="hint" id="plan-total"></p>
+      </section>
+      <ol class="steps">
+        <li id="prep-step-input">
+          <h3>1. מאיפה טומבי שומע?</h3>
+          <p class="hint">הטאבלט עומד כמטר מהילד. במצב סימולציה אפשר לתרגל את הפעילויות בלי ילד, עם כפתורים בפאנל הסייעת.</p>
+          <div class="row">
+            <button class="btn" id="btn-mic" type="button">מיקרופון</button>
+            <button class="btn btn-ghost" id="btn-sim" type="button">סימולציה</button>
+          </div>
+          <p class="error" id="mic-error" hidden></p>
+        </li>
+        <li id="prep-step-cal" class="is-locked">
+          <h3>2. רגע של שקט בחדר</h3>
+          <p class="hint">טומבי לומד את רעש הרקע כדי לדעת מתי מישהו מדבר.</p>
+          <p class="warn" id="audio-constraints-warn" hidden>הדפדפן הפעיל סינון או הגברה אוטומטית. מדידות העוצמה והתזמון עלולות להיות שונות.</p>
+          <div class="meter-box"><canvas id="prep-meter" width="600" height="60" aria-label="עוצמת הקול בחדר"></canvas><span id="prep-readout" class="readout">—</span></div>
+          <button class="btn btn-ghost" id="btn-cal" type="button" disabled>כיול מחדש</button>
+        </li>
+        <li id="prep-step-words" class="is-locked">
+          <h3>3. ללמד את טומבי את המילים (לא חובה)</h3>
+          <p class="hint">הילד אומר פעם אחת כל מילה. נשמרת רק "טביעת קול" מספרית, לא הקלטה. גם בלי זה הפעילויות עובדות: כשטומבי לא בטוח, הילד מצביע או הסייעת לוחצת, וטומבי לומד מזה.</p>
+          <div class="teach">
+            <button class="teach-btn" data-w="turtle" type="button"><span aria-hidden="true">🐢</span> צב <small></small></button>
+            <button class="teach-btn" data-w="fish" type="button"><span aria-hidden="true">🐟</span> דג <small></small></button>
+            <button class="teach-btn" data-w="monkey" type="button"><span aria-hidden="true">🐒</span> קוף <small></small></button>
+          </div>
+          <p class="hint" id="teach-status" aria-live="polite"></p>
+        </li>
+        <li id="prep-step-go" class="is-locked">
+          <h3>4. מתחילים</h3>
+          <p class="warn" id="voice-warn" hidden>לא נמצא קול עברי בדפדפן, אז טומבי יזיז את הפה ויציג את הטקסט בבועה. אפשר להתקין קול עברי (הוראות בהגדרות) או להקליט את השורות של טומבי בקול שלך.</p>
+          <p class="hint">במהלך המפגש הילד רואה רק את טומבי, על כל המסך. פאנל הסייעת נפתח בלחיצה ארוכה (שנייה) על הפינה העליונה בצד שמאל, או במקש <kbd>A</kbd>.</p>
+          <button class="btn btn-big" id="btn-start" type="button" disabled>להתחיל את המפגש</button>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ===== Game: the child sees only Tombi ===== -->
+  <section id="screen-game" class="screen game" hidden>
+    <canvas id="tombi-canvas" aria-label="טומבי הדרקון"></canvas>
+    <div id="activity-picture" class="activity-picture-overlay" hidden aria-hidden="true"></div>
+    <div class="choices" id="child-choices" hidden></div>
+    <div class="hotspot" id="aide-hotspot" aria-hidden="true"><span class="hotspot-ring"></span></div>
+
+    <aside id="aide" class="aide" aria-label="פאנל סייעת" hidden>
+      <div class="aide-head">
+        <strong>פאנל סייעת</strong>
+        <button class="icon-btn" id="aide-close" type="button" aria-label="סגירה">×</button>
+      </div>
+        <p class="warn" id="aide-audio-constraints-warn" hidden></p>
+        <p class="warn" id="aide-loopback-warn" hidden></p>
+        <nav class="stagebar" id="stagebar" aria-label="שלבי המפגש"></nav>
+      <p class="hint" id="aide-plan-next"></p>
+      <p class="warn" id="onset-repeat-warn" hidden>רועש מדי — הניסיון סומן לחזרה ולא ייספר.</p>
+      <div class="aide-sec">
+        <div class="aide-stage" id="aide-stage">—</div>
+        <p class="caption" id="bubble" aria-live="polite"></p>
+        <div class="live" id="task"></div>
+        <div class="listen-state" id="listen-state">טומבי מדבר</div>
+        <canvas id="aide-meter" width="600" height="70" aria-label="מד קול"></canvas>
+        <div class="aide-readout" id="aide-readout">—</div>
+      </div>
+      <div class="aide-sec" id="aide-finished" hidden>
+        <button class="btn btn-big btn-wide" id="a-finish" type="button">המפגש נשמר: לסיכום</button>
+      </div>
+      <div class="aide-sec" id="aide-controls">
+        <button class="btn btn-big btn-wide" id="a-manual" type="button">הילד הגיב <kbd>רווח</kbd></button>
+        <div class="grid2">
+          <button class="btn btn-ghost" id="a-repeat" type="button">חזרה על ההוראה <kbd>R</kbd></button>
+          <button class="btn btn-ghost" id="a-pause" type="button">השהיה <kbd>P</kbd></button>
+          <button class="btn btn-ghost" id="a-skip" type="button">דילוג על שלב <kbd>N</kbd></button>
+          <button class="btn btn-ghost" id="a-calm" type="button" hidden>לעבור להרגעה</button>
+          <button class="btn btn-danger-ghost" id="a-end" type="button">סיום מפגש</button>
+        </div>
+      </div>
+      <div class="aide-sec" id="aide-engine" hidden>
+        <h4>הילד הצביע על:</h4>
+        <div class="grid3">
+          <button class="btn btn-ghost" data-pick="turtle" type="button">🐢 צב</button>
+          <button class="btn btn-ghost" data-pick="fish" type="button">🐟 דג</button>
+          <button class="btn btn-ghost" data-pick="monkey" type="button">🐒 קוף</button>
+        </div>
+      </div>
+      <div class="aide-sec">
+        <h4>עזרה שנתתי <span class="count" id="assist-count">0</span></h4>
+        <div class="grid2">
+          <button class="btn btn-ghost" data-assist="verbal" type="button">מילולית</button>
+          <button class="btn btn-ghost" data-assist="model" type="button">הדגמה</button>
+          <button class="btn btn-ghost" data-assist="gesture" type="button">רמז / הצבעה</button>
+          <button class="btn btn-ghost" data-assist="physical" type="button">פיזית</button>
+        </div>
+      </div>
+      <div class="aide-sec" id="aide-sim" hidden>
+        <h4>סימולציה: צלילים של "ילד"</h4>
+        <div class="grid2">
+          <button class="btn btn-ghost" data-sim="word" type="button">מילה קצרה</button>
+          <button class="btn btn-ghost" data-sim="soft" type="button">שלום בשקט</button>
+          <button class="btn btn-ghost" data-sim="loud" type="button">שלום בקול</button>
+          <button class="btn btn-ghost" data-sim="ba2" type="button">בה-בה</button>
+          <button class="btn btn-ghost" data-sim="ba3" type="button">בה-בה-בה</button>
+          <button class="btn btn-ghost" data-sim="clap4" type="button">4 מחיאות</button>
+          <button class="btn btn-ghost" data-sim="sss" type="button">סססס 4 שניות</button>
+          <button class="btn btn-ghost" data-sim="adult" type="button">קול מבוגר</button>
+        </div>
+      </div>
+      <ul class="aide-log" id="aide-log" aria-label="יומן"></ul>
+    </aside>
+  </section>
+
+  <!-- ===== Done ===== -->
+  <section id="screen-done" class="screen paper" hidden>
+    <div class="wrap narrow">
+      <h1>המפגש נשמר</h1>
+      <div id="done-body"></div>
+      <div class="row">
+        <button class="btn btn-ghost no-print" id="btn-done-pdf" type="button">הורדת סיכום המפגש כ-PDF</button>
+        <button class="btn" id="btn-done-report" type="button">לדוח ההתקדמות</button>
+        <button class="btn btn-ghost" data-go="home" type="button">למסך הבית</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Report ===== -->
+  <section id="screen-report" class="screen paper report" hidden>
+    <div class="wrap">
+      <button class="back no-print" data-go="home" type="button">חזרה</button>
+      <div id="report-body"></div>
+    </div>
+  </section>
+
+  <!-- ===== Settings ===== -->
+  <section id="screen-settings" class="screen paper" hidden>
+    <div class="wrap narrow">
+      <button class="back" data-go="home" type="button">חזרה</button>
+      <h1>הגדרות</h1>
+
+      <h2>הקול של טומבי</h2>
+      <div class="form">
+        <label>קול עברי <select id="s-voice"></select></label>
+        <p class="hint" id="s-voice-hint"></p>
+        <div class="two">
+          <label>מהירות <input type="range" id="s-rate" min="0.6" max="1.3" step="0.05"></label>
+          <label>גובה <input type="range" id="s-pitch" min="0.8" max="2" step="0.05"></label>
+        </div>
+        <button class="btn btn-ghost" id="s-test" type="button">לשמוע את טומבי</button>
+      </div>
+
+      <h3>הקלטת השורות של טומבי בקול שלך</h3>
+      <p class="hint">שורה מוקלטת מחליפה את הקול הממוחשב, והפה של טומבי זז לפי ההקלטה. השורות מופיעות כאן אחרי שטומבי אמר אותן פעם אחת (אפשר להריץ מפגש בסימולציה כדי לאסוף את כולן). אלה הקלטות שלך, לא של הילד.</p>
+      <div id="lines" class="lines"></div>
+
+      <h2>האזנה</h2>
+      <div class="form">
+        <label>רגישות: <output id="s-sens-out"></output> dB מעל רעש הרקע <input type="range" id="s-sens" min="6" max="24" step="1"></label>
+        <label class="check"><input type="checkbox" id="s-adult"> לא לספור קול של מבוגר (לפי גובה הקול)</label>
+        <label>גובה קול שמתחתיו זה מבוגר: <output id="s-adult-out"></output> הרץ <input type="range" id="s-adulthz" min="150" max="260" step="5"></label>
+        <label>יעד לנחש (שניות, 0 = לפי גיל) <input type="number" id="s-snake" min="0" max="20" step="0.5"></label>
+        <label>יעד מפגשים שבועי <input type="number" id="s-weekly-goal" min="1" max="50" step="1"></label>
+      </div>
+
+      <h2>נתונים</h2>
+      <div class="row">
+        <button class="btn btn-ghost" id="s-export" type="button">גיבוי לקובץ</button>
+        <label class="btn btn-ghost file-btn">שחזור מקובץ <input type="file" id="s-import" accept=".json,application/json"></label>
+        <button class="btn btn-ghost" id="s-sample" type="button">הוספת נתוני הדגמה (תום, בן, דן ונועה)</button>
+        <button class="btn btn-danger-ghost" id="s-wipe" type="button">מחיקת כל הנתונים</button>
+      </div>
+      <p class="hint" id="s-data-status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <!-- in-page confirm (works also where confirm() is blocked) -->
+  <div class="modal" id="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-text">
+      <p id="modal-text"></p>
+      <div class="row">
+        <button class="btn btn-danger" id="modal-yes" type="button">כן</button>
+        <button class="btn btn-ghost" id="modal-no" type="button">ביטול</button>
+      </div>
+    </div>
+  </div>
+    <div class="modal" id="help-modal" hidden>
+      <div class="modal-card help-card" role="dialog" aria-modal="true" aria-labelledby="help-title">
+        <h2 id="help-title">איך עובד המפגש?</h2>
+        <p>האווטאר טומבי מוביל מפגש קצר דרך פעילויות לתרגול קצב, עוצמת קול, קשב ונשימה. הקול הוא דרך לתגובה בלבד; המדדים נשמרים בדפדפן.</p>
+        <p>פאנל הסייעת נפתח בלחיצה ארוכה של שנייה בפינה העליונה השמאלית במסך הפעילות, או במקש A. ממנו אפשר לסמן תגובה, לחזור על הוראה, להשהות, לדלג ולתעד עזרה.</p>
+        <button class="btn" id="btn-help-close" type="button">הבנתי</button>
+      </div>
+    </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+<script src="js/dsp.js?v=20261024-sibilance-fix"></script>
+<script src="js/audio.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/goals.js"></script>
+<script src="js/pdf.js"></script>
+<script src="js/tombi.js?v=20261024-2530-brow-texture-lids"></script>
+<script src="js/tasks/registry.js"></script>
+<script src="js/tasks/wake-up.js"></script>
+<script src="js/tasks/engine.js"></script>
+<script src="js/tasks/echo.js"></script>
+<script src="js/tasks/loudness.js"></script>
+<script src="js/tasks/magic.js"></script>
+<script src="js/tasks/snake.js"></script>
+<script src="js/tasks/activity-support.js"></script>
+<script src="js/tasks/stomp-freeze.js"></script>
+<script src="js/tasks/jumps.js"></script>
+<script src="js/tasks/reverse-drum.js"></script>
+<script src="js/tasks/turtle-rabbit.js"></script>
+<script src="js/tasks/clap-stomp.js"></script>
+<script src="js/tasks/ball.js"></script>
+<script src="js/tasks/elephant-mouse.js"></script>
+<script src="js/tasks/march.js"></script>
+<script src="js/lines.js"></script>
+<script src="js/planner.js"></script>
+<script src="js/stages.js"></script>
+<script src="js/report.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

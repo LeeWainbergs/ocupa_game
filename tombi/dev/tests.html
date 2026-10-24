@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>בדיקות אות · טומבי</title>
+  <style>
+    body { max-width: 860px; margin: 2rem auto; padding: 0 1rem; font: 16px system-ui, sans-serif; color: #17322d; }
+    li { margin: .5rem 0; } .pass { color: #176b4d; } .fail { color: #a32929; }
+    pre { white-space: pre-wrap; background: #f0f7f5; padding: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>בדיקות אות סינתטיות</h1>
+  <p id="summary">מריץ…</p>
+  <ol id="results"></ol>
+  <pre id="details"></pre>
+  <script src="../js/dsp.js"></script>
+  <script src="../js/storage.js"></script>
+  <script src="../js/levels.js"></script>
+  <script src="../js/goals.js"></script>
+  <script src="../js/tasks/registry.js"></script>
+  <script src="../js/tasks/wake-up.js"></script>
+  <script src="../js/tasks/engine.js"></script>
+  <script src="../js/tasks/echo.js"></script>
+  <script src="../js/tasks/loudness.js"></script>
+  <script src="../js/tasks/magic.js"></script>
+  <script src="../js/tasks/snake.js"></script>
+  <script src="../js/tasks/activity-support.js"></script>
+  <script src="../js/tasks/stomp-freeze.js"></script>
+  <script src="../js/tasks/jumps.js"></script>
+  <script src="../js/tasks/reverse-drum.js"></script>
+  <script src="../js/tasks/turtle-rabbit.js"></script>
+  <script src="../js/tasks/clap-stomp.js"></script>
+  <script src="../js/tasks/ball.js"></script>
+  <script src="../js/tasks/elephant-mouse.js"></script>
+  <script src="../js/tasks/march.js"></script>
+  <script src="../js/planner.js"></script>
+  <script>
+    const tests = [];
+    const test = (name, run) => {
+      try { const detail = run(); tests.push({ name, pass: detail !== false, detail }); }
+      catch (error) { tests.push({ name, pass: false, detail: error.message }); }
+    };
+    const samples = new Float32Array(512);
+    for (let i = 0; i < samples.length; i++) samples[i] = Math.sin(2 * Math.PI * 100 * i / 16000);
+    function impact(frequency, decaySeconds) {
+      const signal = new Float32Array(6400);
+      for (let i = 0; i < signal.length; i++) {
+        signal[i] = 0.7 * Math.sin(2 * Math.PI * frequency * i / 16000) * Math.exp(-i / (16000 * decaySeconds));
+      }
+      return signal;
+    }
+    test('עשרת פסי התדר מחזירים ערכים סופיים', () => {
+      const bands = T.dsp.onsetBands(samples, 16000);
+      return bands.length === 10 && bands.every(Number.isFinite) ? `bands=${bands.length}` : false;
+    });
+    test('שטף חיובי מזהה עלייה בספקטרום', () => T.dsp.onsetFlux(new Array(10).fill(2), new Array(10).fill(1)) > 0);
+    test('סף אדפטיבי נשאר סופי', () => Number.isFinite(T.dsp.adaptiveOnsetThreshold([0, 1, 0, 1, 0])));
+    test('מאפייני אות סינתטי מבדילים בין רקיעה למחיאה', () => {
+      const stomp = T.dsp.onsetFeatures(impact(75, 0.04));
+      const clap = T.dsp.onsetFeatures(impact(1800, 0.018));
+      return T.dsp.classifyOnset(stomp).cls === 'stomp' && T.dsp.classifyOnset(clap).cls === 'clap';
+    });
+    test('מאפיין שריקה מזהה אנרגיה בתחום 4–8 קה״ץ', () => {
+      const hiss = Float32Array.from({ length: 6400 }, (_, i) => Math.sin(2 * Math.PI * 5000 * i / 16000));
+      const features = T.dsp.sibilanceFeatures(hiss);
+      return features.highBandRatio > 0.5 && features.zcr > 0.1 && features.f0Hz === 0;
+    });
+    test('קול הרמוני אינו מסווג כשריקה', () => {
+      const voice = Float32Array.from({ length: 6400 }, (_, i) => Math.sin(2 * Math.PI * 300 * i / 16000));
+      const features = T.dsp.sibilanceFeatures(voice);
+      return features.f0Hz > 250;
+    });
+    test('נרמול מאפיינים מוגבל ל־0..1', () => {
+      const v = T.dsp.normalizeOnsetFeatures({ lowBandRatio: 2, centroidHz: 9000, zcr: .2, harmonicity: .5, decayMs: 200, durationMs: 100 });
+      return v.length === 6 && v.every((x) => x >= 0 && x <= 1);
+    });
+    test('בחירת שיאים אוכפת מרווח מינימלי בין onsets', () => {
+      const frames = Array.from({ length: 50 }, (_, i) => ({ t: i * 10, db: -30, odf: 0 }));
+      frames[12].odf = 10; frames[22].odf = 9;
+      return T.dsp.peakPick(frames, { floorDb: -60, minAboveFloor: 10, minIoiMs: 130 }).length === 1;
+    });
+    test('שיא מתחת לסף רעש אינו נבחר', () => {
+      const frames = Array.from({ length: 40 }, (_, i) => ({ t: i * 10, db: -55, odf: i === 20 ? 20 : 0 }));
+      return T.dsp.peakPick(frames, { floorDb: -60, minAboveFloor: 10 }).length === 0;
+    });
+    test('שומר סף retrigger מתעלם מהד חלש ומקבל onset חזק', () =>
+      !T.dsp.acceptOnset(1050, -55, 1000, -30, 0, 150)
+      && T.dsp.acceptOnset(1150, -20, 1000, -30, 130, 150));
+    test('סיווג אירוע קרוב לשני צנטרואידים מסומן לא ודאי', () => {
+      const f = { lowBandRatio: .4, centroidHz: 1000, zcr: .1, harmonicity: .2, decayMs: 80, durationMs: 80 };
+      const vector = T.dsp.normalizeOnsetFeatures(f);
+      const close = vector.map((x) => x + .001), other = vector.map((x) => x + .001);
+      return T.dsp.classifyOnset(f, { stomp: close, clap: other }).cls === 'uncertain';
+    });
+    test('מיזוג נחיתות שומר אירועים נפרדים', () => {
+      const merged = T.dsp.mergeLandings([{ t: 10, peakDb: -20 }, { t: 40, peakDb: -18 }, { t: 240, peakDb: -25 }]);
+      return merged.length === 2 && merged[0].members === 2;
+    });
+    test('זיהוי כדור נופל לפי האצה מדורגת', () => T.dsp.ballFell([{ t: 0 }, { t: 500 }, { t: 850 }]));
+    test('חלון שערה פועל על שעון האודיו', () => T.dsp.isTimeGated(120, [[100, 140]]) && !T.dsp.isTimeGated(150, [[100, 140]]));
+    test('תבנית מטרה מתקשרת למשימות חוקיות', () => {
+      const goal = T.goals.normalize({ template: 'rhythm', target: 80 });
+      return goal.metric === 'score' && goal.taskKeys.includes('echo') && goal.target === 80;
+    });
+    test('מטרה דוחה יעד מחוץ לטווח', () => {
+      try { T.goals.normalize({ template: 'rhythm', target: 120 }); return false; }
+      catch (error) { return error instanceof RangeError; }
+    });
+    test('ראיות עם ביטחון נמוך אינן נכללות במגמה', () => {
+      const child = { id: 'test-child' };
+      const goal = T.goals.normalize({ template: 'inhibition', target: 80, baseline: 40 });
+      const sessions = [0.9, 0.4, 0.8].map((confidence, index) => ({
+        childId: child.id, date: index + 1, stages: { magic: { score: 50 + index * 10, confidence } }, assists: [],
+      }));
+      const result = T.goals.evaluate(child, goal, sessions);
+      return result.rows.length === 3 && result.validCount === 2 && result.recentCount === 2 && result.review;
+    });
+    test('הערכת מטרה משקפת מגמה, תמיכה והגעה ליעד רק לאחר שתי מדידות', () => {
+      const child = { id: 'test-child' };
+      const goal = T.goals.normalize({ template: 'rhythm', target: 70, baseline: 40 });
+      const sessions = [70, 74, 80].map((score, index) => ({
+        childId: child.id, date: index + 1, stages: { echo: { score, confidence: 0.9 } },
+        assists: index === 0 ? [{ stage: 'echo', type: 'verbal' }] : [],
+      }));
+      const result = T.goals.evaluate(child, goal, sessions);
+      return result.targetReached && result.validCount === 3 && result.assistRate > 0 && result.direction === 1;
+    });
+    test('רשומות הדגמה אינן הופכות לראיות של ילד אמיתי', () => {
+      const session = { childId: 'test-child', date: 1, sample: true, stages: { echo: { score: 80 } } };
+      const goal = T.goals.normalize({ template: 'rhythm', target: 80 });
+      const real = T.goals.evaluate({ id: 'test-child' }, goal, [session]);
+      const demo = T.goals.evaluate({ id: 'test-child', demo: true }, goal, [session]);
+      return real.validCount === 0 && demo.validCount === 1;
+    });
+    test('ראיות ממספר משימות באותו מפגש נספרות כמפגש אחד', () => {
+      const child = { id: 'test-child' };
+      const goal = T.goals.normalize({ template: 'rhythm', target: 80 });
+      const sessions = [1, 2].map((date) => ({
+        childId: child.id, date,
+        stages: { echo: { score: 60 + date, confidence: 0.9 }, march: { score: 70 + date, confidence: 0.8 } },
+      }));
+      const result = T.goals.evaluate(child, goal, sessions);
+      return result.rows.length === 2 && result.validCount === 2 && Math.round(result.first) === 66;
+    });
+    test('תוכנית מעדיפה לקשר משימה למטרה מאושרת ושומרת הסבר', () => {
+      const goal = T.goals.normalize({ template: 'rhythm', target: 80, approved: true, approvedBy: 'בדיקה' });
+      const child = { id: 'planner-child', age: 5, goals: [goal] };
+      const plan = T.planner.build(child, { budgetMin: 12 }, [], { date: '2026-10-24' });
+      const linked = plan.tasks.find((entry) => entry.goalIds.includes(goal.id));
+      return !!linked && linked.reason.includes(goal.title) && plan.goals.length === 1;
+    });
+    test('תוכנית אינה משתמשת במטרה שטרם אושרה', () => {
+      const goal = T.goals.normalize({ template: 'rhythm', target: 80, approved: false });
+      const child = { id: 'planner-child', age: 5, goals: [goal] };
+      const plan = T.planner.build(child, { budgetMin: 12 }, [], { date: '2026-10-24' });
+      return plan.goals.length === 0 && plan.tasks.every((entry) => !entry.goalIds.includes(goal.id));
+    });
+    test('החלפת משימה ידנית שומרת על מגבלת קפיצה אחת', () => {
+      const child = { id: 'planner-child', age: 5, canJump: true, canStand: true };
+      const setting = { room: 'clinic', hardFloor: true, freeSpace: true, pot: true, ball: true, quietRoom: true };
+      const plan = [
+        { key: 'jumps', slot: 'arousal' },
+        { key: 'magic', slot: 'inhibition' },
+        { key: 'jumps', slot: 'arousal' },
+      ];
+      const history = [{ childId: child.id, mode: 'mic', stages: { jumps: { score: 70 } } }];
+      const unsafe = T.planner.canReplace(plan, 2, 'jumps', child, setting, history);
+      const safe = T.planner.canReplace(plan, 2, 'stompFreeze', child, setting, history);
+      return !unsafe && safe;
+    });
+    test('משימה ששוחקה לפחות פעם אחת באחד משלושת המפגשים האחרונים אינה due', () => {
+      const recent = [
+        { stages: { march: { score: 70 } } },
+        { stages: { echo: { score: 70 } } },
+        { stages: { march: { skipped: true } } },
+      ];
+      return T.planner.wasPlayedRecently('march', recent)
+        && !T.planner.wasPlayedRecently('clapStomp', recent);
+    });
+    test('התוכנית עומדת בתקציבי 6, 9 ו־12 דקות ומסמנת משימות חובה', () => {
+      const child = { id: 'planner-budget-child', age: 5, canJump: true, canStand: true };
+      return [6, 9, 12].every((budgetMin) => {
+        const plan = T.planner.build(child, { budgetMin }, [], { date: '2026-10-24' });
+        const active = plan.tasks.filter((entry) => !entry.skip);
+        return plan.estimatedSec === T.planner.estimate(plan.tasks)
+          && plan.estimatedSec <= budgetMin * 60
+          && ['wakeUp', 'engineStart', 'turtleRabbit', 'snake', 'engineEnd']
+            .every((key) => plan.tasks.some((entry) => entry.key === key && entry.mandatory))
+          && active.filter((entry) => T.planner.isNewTask(entry.key, child, [])).length <= 1
+          && active.filter((entry) => T.tasks.get(entry.key).jump).length <= 1
+          && T.tasks.all().every((task) => Math.max(task.durationSec.full, task.durationSec.short) <= 120);
+      });
+    });
+    test('גן מסנן כדור ומנהרת לחישה, אך מאפשר שלב קול בסיסי', () => {
+      const child = { id: 'planner-kindergarten-child', age: 5, levels: { loudness: 3 } };
+      const setting = { room: 'kindergarten', quietRoom: false, budgetMin: 9 };
+      const plan = T.planner.build(child, setting, [], { date: '2026-10-24' });
+      return !T.planner.eligible(T.tasks.get('ball'), child, setting)
+        && !T.planner.eligible(T.tasks.get('loudness'), child, setting)
+        && plan.tasks.every((entry) => !['ball', 'loudness'].includes(entry.key));
+    });
+    test('החלפה ידנית אינה יכולה ליצור שתי משימות חדשות או רצף תנועה בעמידה', () => {
+      const child = { id: 'planner-replace-child', age: 5, canJump: true, canStand: true };
+      const setting = { hardFloor: true, freeSpace: true, pot: true, ball: true, quietRoom: true, room: 'clinic' };
+      const history = [{ childId: child.id, mode: 'mic', stages: { stompFreeze: { score: 75 } } }];
+      const grossPlan = [
+        { key: 'echo', slot: 'rhythm' },
+        { key: 'stompFreeze', slot: 'arousal' },
+      ];
+      const twoNewTasks = [
+        { key: 'march', slot: 'rhythm' },
+        { key: 'stompFreeze', slot: 'arousal' },
+      ];
+      return !T.planner.canReplace(grossPlan, 0, 'march', child, setting, history)
+        && !T.planner.canReplace(twoNewTasks, 1, 'jumps', child, setting, []);
+    });
+    test('תצפית תפקודית נשמרת עם הקשר מחוץ למדדי המיקרופון', () => {
+      const originalSave = T.store.save;
+      const child = { id: 'carryover-child' };
+      T.store.save = () => {};
+      try {
+        const note = T.goals.updateCarryover(child, null, 'המתין לתור במשחק', 'kindergarten');
+        return note.context === 'kindergarten' && child.carryoverNotes.length === 1 && note.text.includes('המתין');
+      } finally { T.store.save = originalSave; }
+    });
+    const failed = tests.filter((result) => !result.pass);
+    document.getElementById('summary').textContent = `${tests.length - failed.length}/${tests.length} בדיקות עברו`;
+    document.getElementById('results').innerHTML = tests.map((result) => `<li class="${result.pass ? 'pass' : 'fail'}">${result.pass ? 'עבר' : 'נכשל'}: ${result.name}</li>`).join('');
+    document.getElementById('details').textContent = JSON.stringify(tests, null, 2);
+    if (failed.length) throw new Error(`${failed.length} signal test(s) failed`);
+  </script>
+</body>
+</html>

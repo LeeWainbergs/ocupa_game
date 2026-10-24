@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>בדיקת זיהוי צלילים · טומבי</title>
+  <style>
+    body { max-width: 960px; margin: 2rem auto; padding: 0 1rem; font: 16px system-ui, sans-serif; color: #17322d; }
+    button { margin: .25rem; padding: .6rem 1rem; cursor: pointer; }
+    canvas { width: 100%; height: 180px; border: 1px solid #b8c9c4; }
+    pre { min-height: 3rem; padding: .75rem; background: #f0f7f5; overflow: auto; }
+    #events { max-height: 20rem; }
+  </style>
+</head>
+<body>
+  <h1>בדיקת זיהוי צלילים</h1>
+  <p>הכלי מציג מדידות מקומיות בלבד. צלילי סימולציה אינם נשמרים.</p>
+  <button id="mic" type="button">הפעלת מיקרופון</button>
+  <button id="sim" type="button">הפעלת סימולציה</button>
+  <button id="hit" type="button" disabled>השמעת רקיעה</button>
+  <button id="stop" type="button">עצירה</button>
+  <p id="status">לא פעיל</p>
+  <canvas id="plot" width="900" height="180" aria-label="תרשים עוצמה ושטף"></canvas>
+  <h2>אירועים אחרונים</h2>
+  <pre id="events">אין אירועים עדיין</pre>
+  <h2>פסי תדר, רצפה ו־SNR</h2>
+  <pre id="bands">אין נתונים עדיין</pre>
+  <script src="../js/dsp.js"></script>
+  <script src="../js/audio.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const points = [];
+    let off = null;
+    const ctx = $('plot').getContext('2d');
+    function draw() {
+      const canvas = $('plot'), w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = '#f7faf9'; ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = '#b8c9c4'; ctx.beginPath(); ctx.moveTo(0, h - 1); ctx.lineTo(w, h - 1); ctx.stroke();
+      ctx.strokeStyle = '#237f70'; ctx.beginPath();
+      points.forEach((point, index) => {
+        const x = index * w / Math.max(1, points.length - 1), y = h - 8 - Math.max(0, Math.min(1, (point.odf + 1) / 8)) * (h - 16);
+        if (!index) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+    function listen() {
+      off && off();
+      points.length = 0;
+      $('events').textContent = 'ממתין לאירועים…';
+      off = T.audio.on((type, event) => {
+        if (type === 'frame') {
+          points.push(event.odf);
+          if (points.length > 180) points.shift();
+          draw();
+          $('bands').textContent = JSON.stringify({ floorDb: T.audio.floor, db: event.db, snr: +(event.db - T.audio.floor).toFixed(1), bands: Array.from(event.bands) }, null, 2);
+        }
+        if (type === 'onsetX') {
+          const rows = $('events').textContent === 'ממתין לאירועים…' ? [] : JSON.parse($('events').textContent);
+          rows.unshift({ t: +event.t.toFixed(1), cls: event.cls, confidence: +event.clsConf.toFixed(2), peakDb: +event.peakDb.toFixed(1), snr: +event.snr.toFixed(1), feats: event.feats });
+          $('events').textContent = JSON.stringify(rows.slice(0, 20), null, 2);
+        }
+      });
+    }
+    $('mic').onclick = async () => {
+      try { await T.audio.startMic(); listen(); $('status').textContent = 'מיקרופון פעיל'; $('hit').disabled = true; }
+      catch (error) { $('status').textContent = `שגיאה בהפעלת המיקרופון: ${error.message}`; }
+    };
+    $('sim').onclick = async () => {
+      try { await T.audio.startSim(); listen(); $('status').textContent = 'סימולציה פעילה'; $('hit').disabled = false; }
+      catch (error) { $('status').textContent = `שגיאה בהפעלת הסימולציה: ${error.message}`; }
+    };
+    $('hit').onclick = () => T.audio.sim.stomp(0, 0.65);
+    $('stop').onclick = () => { off && off(); off = null; T.audio.stop(); $('status').textContent = 'נעצר'; $('hit').disabled = true; };
+  </script>
+</body>
+</html>
