@@ -318,7 +318,7 @@ input[type=range] { accent-color: var(--moss); width: 100%; }
 .loud.has-cat { grid-template-columns: repeat(3, minmax(0,1fr)); }
 .loud-animal { --grow: 1; display: grid; justify-items: center; gap: 8px; padding: 18px; border-radius: 24px; background: rgba(255,255,255,.1); opacity: .5; transition: opacity .3s; }
 .loud-animal.is-on { opacity: 1; background: rgba(255,255,255,.18); }
-.loud-emoji { font-size: clamp(3rem, 7vw, 5rem); transform: scale(var(--grow)); transition: transform .08s; }
+.loud-emoji { width: clamp(3rem, 7vw, 5rem); height: clamp(3rem, 7vw, 5rem); transform: scale(var(--grow)); transition: transform .08s; }
 .loud-name { font: 600 1.3rem var(--font-display); }
 .meter { width: 100%; height: 14px; border-radius: 8px; background: rgba(0,0,0,.25); overflow: hidden; direction: ltr; }
 .meter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--mint), var(--amber), var(--ember)); transition: width .06s; }
@@ -326,17 +326,22 @@ input[type=range] { accent-color: var(--moss); width: 100%; }
 /* story */
 .story { display: grid; gap: 10px; }
 .night-sky { position: relative; height: 130px; overflow: hidden; border: 1px solid rgba(255,255,255,.12); border-radius: 20px; background: radial-gradient(ellipse at 50% 110%, #284F73, #122B48 68%, #0B1F35); }
-.night-sky::before { content: "·     ✦        ·       ·    ✧      ·       ✦       ·"; position: absolute; inset: 14px 10px auto; color: rgba(255,255,255,.65); font-size: 1rem; letter-spacing: 8px; text-align: center; }
-.story-star { position: absolute; bottom: 10px; left: var(--x); color: #F7D76A; font-size: 2.4rem; opacity: .45; filter: drop-shadow(0 0 5px rgba(255,224,128,.45)); animation: star-rise .65s ease-out; }
-.story-star.is-hit { color: #FFF1A8; font-size: 3.2rem; opacity: 1; filter: drop-shadow(0 0 10px rgba(255,224,128,.9)); }
+.night-sky::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 12% 24%, rgba(255,255,255,.8) 1px, transparent 2px), radial-gradient(circle at 29% 50%, rgba(255,255,255,.7) 1px, transparent 2px), radial-gradient(circle at 48% 18%, rgba(255,255,255,.8) 1px, transparent 2px), radial-gradient(circle at 72% 39%, rgba(255,255,255,.7) 1px, transparent 2px), radial-gradient(circle at 88% 20%, rgba(255,255,255,.8) 1px, transparent 2px); }
+.story-cue { display: flex; justify-content: center; min-height: 1px; }
+.story-cue svg { width: 4rem; height: 4rem; filter: drop-shadow(0 0 8px rgba(255,224,128,.55)); }
+.story-star { position: absolute; bottom: 10px; left: var(--x); width: 2.4rem; height: 2.4rem; color: #F7D76A; opacity: .45; filter: drop-shadow(0 0 5px rgba(255,224,128,.45)); animation: star-rise .65s ease-out; }
+.story-star svg { width: 100%; height: 100%; }
+.story-star.is-hit { width: 3.2rem; height: 3.2rem; color: #FFF1A8; opacity: 1; filter: drop-shadow(0 0 10px rgba(255,224,128,.9)); }
 @keyframes star-rise { 0% { transform: translateY(48px) scale(.65); } 65% { transform: translateY(-18px) scale(1.12); } 100% { transform: none; } }
 .story-caption { font-size: .9rem; opacity: .8; }
 
 /* snake */
 .snake { display: grid; gap: 12px; }
-.snake-track { height: 70px; border-radius: 40px; background: rgba(0,0,0,.2); padding: 8px; direction: ltr; }
+.snake-track { height: 70px; border-radius: 40px; background: rgba(0,0,0,.2); padding: 8px; direction: ltr; position: relative; }
+.snake-track::after { content: ""; position: absolute; z-index: 1; top: 6px; bottom: 6px; left: var(--goal); border-left: 3px solid #f1cd6d; box-shadow: 0 0 8px #f1cd6d; }
+.snake--stop .snake-track::after { display: none; }
 .snake-body { --len: 0; height: 100%; width: calc(54px + (100% - 54px) * var(--len)); border-radius: 30px; background: repeating-linear-gradient(90deg, #7FCB8E 0 18px, #5DAE6F 18px 30px); position: relative; transition: width .08s linear; }
-.snake-head { position: absolute; right: -4px; top: 50%; transform: translateY(-50%) scaleX(-1); font-size: 2.6rem; }
+.snake-head { position: absolute; right: -4px; top: 50%; width: 2.6rem; height: 2rem; transform: translateY(-50%) scaleX(-1); }
 .snake-time { font: 600 2rem var(--font-display); }
 .snake-trials { display: flex; gap: 8px; }
 .chip { background: rgba(255,255,255,.16); padding: 4px 12px; border-radius: 999px; }
@@ -372,16 +377,17 @@ input[type=range] { accent-color: var(--moss); width: 100%; }
 .aide-log { list-style: none; margin: 0; padding: 10px 0 0; border-top: 1px solid var(--line); font-size: .8rem; color: var(--muted); display: grid; gap: 3px; }
 
 /* the live stage visuals, shrunk to fit the aide panel */
-.live .engine-emoji, .live .loud-emoji { font-size: 2rem; }
+.live .engine-emoji { font-size: 2rem; }
+.live .loud-emoji { width: 2rem; height: 2rem; }
 .live .engine-label, .live .loud-name { font-size: 1rem; }
 .live .echo { padding: 10px; gap: 8px; }
 .live .echo-row { height: 30px; }
 .live .dot { width: 20px; height: 20px; margin: -10px 0 0 -10px; }
 .live .loud-animal { padding: 8px; }
 .live .night-sky { height: 70px; }
-.live .story-star { font-size: 1.4rem; } .live .story-star.is-hit { font-size: 1.8rem; }
+.live .story-star { width: 1.4rem; height: 1.4rem; } .live .story-star.is-hit { width: 1.8rem; height: 1.8rem; }
 .live .snake-track { height: 40px; padding: 5px; }
-.live .snake-head { font-size: 1.5rem; }
+.live .snake-head { width: 1.5rem; height: 1.2rem; }
 .live .snake-time { font-size: 1.2rem; }
 .live .snake-body { width: calc(30px + (100% - 30px) * var(--len)); }
 

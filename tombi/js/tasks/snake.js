@@ -1,4 +1,67 @@
 /* snake.js — sustained quiet-sound task definition. */
+async function runStopCue(ctx, box, params) {
+  const line = (key) => T.lines.get(key, ctx.child.gender, ctx.nonverbal);
+  const trials = params.level >= 5 ? 2 : 1;
+  const results = [];
+  box.innerHTML = `<div class="snake snake--stop"><div class="snake-track"><div class="snake-body"><svg class="snake-head" viewBox="0 0 64 48" aria-hidden="true"><path d="M8 29c0-10 9-18 22-18h7c10 0 17 6 17 14s-7 14-17 14H26c-10 0-18-3-18-10Z" fill="#83bd93" stroke="#356c54" stroke-width="3"/><circle cx="43" cy="21" r="2.5" fill="#17322d"/></svg></div></div><div class="snake-time" aria-live="polite">מקשיבים לנחש...</div><div class="snake-trials"></div></div>`;
+  const time = box.querySelector('.snake-time');
+  const trialList = box.querySelector('.snake-trials');
+
+  await ctx.say(line('snake_intro'), `snake_stop_intro_${ctx.child.gender}_${ctx.nonverbal ? 'nv' : 'v'}`);
+  for (let index = 0; index < trials; index++) {
+    await ctx.say(line('snake_go'), `snake_stop_go_${index}_${ctx.child.gender}_${ctx.nonverbal ? 'nv' : 'v'}`);
+    const delayMs = Math.round(2000 + Math.random() * 3000);
+    const signal = { cancelled: false };
+    let cueAt = null, lastSibilantAt = null, lastFeatureAt = -Infinity;
+    let preCueSibilantFrames = 0;
+    const floorDb = T.audio.floor;
+    if (T.audio.mode === 'sim') T.audio.sim.hiss(delayMs + 650, 0.15);
+    const listening = ctx.listen({
+      maxMs: delayMs + 6000, startTimeoutMs: delayMs + 5000,
+      endSilenceMs: 700, minDurMs: 100, signal,
+      onLive: (type, frame) => {
+        if (type !== 'frame' || !Number.isFinite(frame.t) || frame.t - lastFeatureAt < 40) return;
+        lastFeatureAt = frame.t;
+        const samples = T.audio.grab(frame.t - 120, frame.t);
+        if (!samples || samples.length < 128) return;
+        const features = T.dsp.sibilanceFeatures(samples);
+        const isSibilant = frame.db > floorDb + (cueAt === null ? 10 : 6)
+          && features.highBandRatio > 0.5 && features.zcr > 0.1 && features.f0Hz === 0;
+        if (cueAt === null) {
+          if (isSibilant) preCueSibilantFrames++;
+        } else if (frame.t >= cueAt && isSibilant) lastSibilantAt = frame.t;
+      },
+    });
+    try {
+      await ctx.wait(delayMs);
+      cueAt = T.audio.now();
+      time.textContent = 'עוצרים...';
+      await ctx.say(line('snake_stop'), `snake_stop_${index}_${ctx.child.gender}_${ctx.nonverbal ? 'nv' : 'v'}`);
+      const response = await listening;
+      const valid = preCueSibilantFrames >= 3;
+      const latencyMs = valid ? Math.max(0, Math.round((lastSibilantAt || cueAt) - cueAt)) : null;
+      results.push({ latencyMs, valid, delayMs });
+      trialList.insertAdjacentHTML('beforeend', `<span class="chip">${latencyMs === null ? 'לא זוהה' : `${latencyMs} מ״ש`}</span>`);
+      time.textContent = latencyMs === null ? 'האות לא זוהה' : `${latencyMs} מ״ש`;
+      if (response.adult.length) T.ui.flash('קול מבוגר — לא נספר');
+    } finally {
+      signal.cancelled = true;
+    }
+  }
+  const valid = results.filter((result) => result.valid);
+  const latencyValues = valid.map((result) => result.latencyMs);
+  const medianLatencyMs = latencyValues.length
+    ? latencyValues.slice().sort((a, b) => a - b)[Math.floor(latencyValues.length / 2)]
+    : null;
+  return {
+    mode: 'stop-cue', stopLatencyMs: medianLatencyMs,
+    trialLatenciesMs: results.map((result) => result.latencyMs),
+    cueDelaysMs: results.map((result) => result.delayMs),
+    nValid: valid.length, level: params.level,
+    score: null, confidence: results.length ? valid.length / results.length : 0,
+  };
+}
+
 T.tasks.register({
   key: 'snake',
   name: 'נחש שקט',
@@ -15,7 +78,8 @@ T.tasks.register({
   params(level, age, child) { return T.levels.params('snake', level, child || { age }); },
   async run(ctx, p) {
     const box = ctx.taskBox();
-    box.innerHTML = `<div class="snake"><div class="snake-track"><div class="snake-body"><span class="snake-head" aria-hidden="true">🐍</span></div></div><div class="snake-time" aria-live="polite">0.0 שניות</div><div class="snake-trials"></div></div>`;
+    if (p.mode === 'stop-cue') return runStopCue(ctx, box, p);
+    box.innerHTML = `<div class="snake"><div class="snake-track" style="--goal:${Math.min(100, 100 / 1.5)}%"><div class="snake-body"><svg class="snake-head" viewBox="0 0 64 48" aria-hidden="true"><path d="M8 29c0-10 9-18 22-18h7c10 0 17 6 17 14s-7 14-17 14H26c-10 0-18-3-18-10Z" fill="#83bd93" stroke="#356c54" stroke-width="3"/><circle cx="43" cy="21" r="2.5" fill="#17322d"/><path d="M53 31c5 0 7 2 9 5m-4-1 3 4" fill="none" stroke="#d66f6f" stroke-width="2.5" stroke-linecap="round"/></svg></div></div><div class="snake-time" aria-live="polite">0.0 שניות</div><div class="snake-trials"></div></div>`;
     const body = box.querySelector('.snake-body'), time = box.querySelector('.snake-time'), trials = box.querySelector('.snake-trials');
     const level = p.level || T.levels.get(ctx.child, 'snake');
     const target = (T.store.settings.snakeTarget || 0) || p.targetSeconds || T.levels.params('snake', level, ctx.child).targetSeconds;
@@ -52,6 +116,7 @@ T.tasks.register({
             if (type === 'segment') segmentStart = null;
           },
         });
+
         const validSegments = response.segments.filter((segment) => {
           if (segment.manual || segment.levelDb - segment.floorDb < 10) return false;
           const features = T.dsp.sibilanceFeatures(T.audio.grab(segment.start, segment.end));
