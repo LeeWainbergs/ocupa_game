@@ -21,7 +21,7 @@ T.activity = (() => {
     return `<svg class="activity-picture" viewBox="0 0 100 100" role="img" aria-label="${kind}">${shapes[kind] || shapes.foot}</svg>`;
   }
 
-  async function collect(ctx, { durationMs, minIoiMs = 130, minAboveFloor = 10, simulate }) {
+  async function collect(ctx, { durationMs, minIoiMs = 130, minAboveFloor = 10, simulate, drainMs = 420 }) {
     const events = [];
     let cutoff = Infinity;
     T.onsets.configure({ minIoiMs, minAboveFloor, floorFrozen: true });
@@ -38,7 +38,7 @@ T.activity = (() => {
       if (T.audio.mode === 'sim' && simulate) simulate();
       await ctx.wait(durationMs);
       cutoff = T.audio.now();
-      await ctx.wait(420);
+      if (drainMs > 0) await ctx.wait(drainMs);
       return events;
     } finally {
       off();
@@ -57,6 +57,21 @@ T.activity = (() => {
     task.textContent = `בטיחות: ${title}. יש לוודא מרחב פנוי ורצפה מתאימה.`;
     await ctx.say(line(intro, ctx), `${intro}_${ctx.child.gender}_${ctx.nonverbal ? 'nv' : 'v'}`);
     await ctx.say(line(instruction, ctx), `${instruction}_${ctx.child.gender}_${ctx.nonverbal ? 'nv' : 'v'}`);
+  }
+
+  async function practice(ctx, simulate, { minIoiMs = 130, minAboveFloor = 9 } = {}) {
+    let events = [], attempts = 0;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      attempts++;
+      if (attempt) await ctx.say(line('activity_practice_again', ctx), `activity_practice_again_${ctx.child.gender}_${ctx.nonverbal ? 'nv' : 'v'}`);
+      else await ctx.say(line('activity_practice', ctx), `activity_practice_${ctx.child.gender}_${ctx.nonverbal ? 'nv' : 'v'}`);
+      events = await collect(ctx, {
+        durationMs: 1200, minIoiMs, minAboveFloor,
+        simulate: () => simulate && simulate(),
+      });
+      if (events.length) break;
+    }
+    return { attempts, detected: events.length > 0 };
   }
 
   function result(events, score, raw = {}) {
@@ -80,5 +95,5 @@ T.activity = (() => {
     return scheduled;
   }
 
-  return { line, picture, collect, start, result, beat };
+  return { line, picture, collect, start, practice, result, beat };
 })();

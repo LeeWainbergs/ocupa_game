@@ -17,6 +17,7 @@
   <pre id="details"></pre>
   <script src="../js/dsp.js"></script>
   <script src="../js/storage.js"></script>
+  <script src="../js/lines.js"></script>
   <script src="../js/levels.js"></script>
   <script src="../js/goals.js"></script>
   <script src="../js/tasks/registry.js"></script>
@@ -221,6 +222,56 @@
       ];
       return !T.planner.canReplace(grossPlan, 0, 'march', child, setting, history)
         && !T.planner.canReplace(twoNewTasks, 1, 'jumps', child, setting, []);
+    });
+    test('לכל אחת מתשע המשימות החדשות יש פרמטרים חוקיים בכל חמש הרמות', () => {
+      const keys = ['stompFreeze', 'jumps', 'reverseDrum', 'turtleRabbit', 'clapStomp', 'ball', 'elephantMouse', 'march', 'snake'];
+      const child = { id: 'level-child', age: 5, canStand: false, canJump: false };
+      return keys.every((key) => {
+        const task = T.tasks.get(key);
+        return typeof task.simulate === 'function'
+          && [1, 2, 3, 4, 5].every((level) => {
+            const params = task.params(level, child.age, child);
+            return Number(params.level) === level && Object.values(params).every((value) => value !== undefined);
+          });
+      });
+    });
+    test('סולם מילת הקסם שומר יחס 75:25 ומחליף כלל רק ברמה 5', () => {
+      const child = { age: 5 };
+      const levels = [1, 2, 3, 4, 5].map((level) => T.levels.params('magic', level, child));
+      const ratios = levels.every((params) => params.items.filter((item) => item.go).length === 9
+        && params.items.filter((item) => !item.go).length === 3);
+      return ratios
+        && levels[0].items.filter((item) => !item.go).every((item) => item.word === 'צפרדע' && item.voice === 'sleepy')
+        && levels[2].items.filter((item) => item.go).every((item) => item.sound === 'bell')
+        && levels[3].irregular && levels[4].ruleSwitch
+        && levels[4].items.filter((item) => item.go).every((item) => item.sound === (item.rule === 'star' ? 'bell' : 'drum'));
+    });
+    test('רמות הנחש והמצעד מותאמות גיל ומפעילות עצירה ואנטי-פאזה בזמן המתאים', () => {
+      const young = { age: 4, canStand: true };
+      const older = { age: 5, canStand: true };
+      const snake1 = T.tasks.get('snake').params(1, young.age, young);
+      const snake4 = T.tasks.get('snake').params(4, young.age, young);
+      const march4 = T.tasks.get('march').params(4, older.age, older);
+      const march5 = T.tasks.get('march').params(5, older.age, older);
+      const marchYoung5 = T.tasks.get('march').params(5, young.age, young);
+      return snake1.mode === 'capacity' && snake1.targetSeconds === 5
+        && snake4.mode === 'stop-cue' && march4.tempoShiftMs >= 50
+        && march5.antiPhase && !marchYoung5.antiPhase;
+    });
+    test('שלושת פרופילי הסימולציה עומדים במגבלת משימה חדשה וקפיצה', () => {
+      const profiles = [
+        { id: 'demo-3', age: 3, nonverbal: false, canJump: true, canStand: true },
+        { id: 'demo-5-nv', age: 5, nonverbal: true, canJump: true, canStand: true },
+        { id: 'demo-6-nojump', age: 6, nonverbal: false, canJump: false, canStand: true },
+      ];
+      return profiles.every((child) => {
+        const plan = T.planner.build(child, { room: 'clinic', budgetMin: 9, hardFloor: true, freeSpace: true }, [], { date: '2026-10-24' });
+        const active = plan.tasks.filter((entry) => !entry.skip);
+        return plan.estimatedSec <= 9 * 60
+          && active.filter((entry) => T.planner.isNewTask(entry.key, child, [])).length <= 1
+          && active.filter((entry) => T.tasks.get(entry.key).jump).length <= 1
+          && (child.canJump !== false || active.every((entry) => entry.key !== 'jumps'));
+      });
     });
     test('תצפית תפקודית נשמרת עם הקשר מחוץ למדדי המיקרופון', () => {
       const originalSave = T.store.save;

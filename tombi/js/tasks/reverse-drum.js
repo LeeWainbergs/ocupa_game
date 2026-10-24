@@ -9,6 +9,7 @@ T.tasks.register({
     return (async () => {
       const itemCount = p.short ? Math.min(8, p.items) : p.items;
       await T.activity.start(ctx, { title: 'התוף ההפוך', picture: 'hands', intro: 'reverse_intro', instruction: 'reverse_go' });
+      const practice = p.isNew ? await T.activity.practice(ctx, () => T.audio.sim.clap(250, 0.45), { minIoiMs: 130, minAboveFloor: 9 }) : null;
       p.sequence.slice(0, itemCount).forEach((hits, i) => {
         const count = p.level === 1 ? hits : 3 - hits;
         for (let j = 0; j < count; j++) T.activity.beat(i * 850 + j * 160, { low: true, gate: true });
@@ -24,7 +25,7 @@ T.tasks.register({
       }
       const correct = correctCounts.filter((item) => item.correct).length;
       await ctx.say(T.activity.line('reverse_praise3', ctx), `reverse_praise3_${ctx.child.gender}_${ctx.nonverbal ? 'nv' : 'v'}`);
-      return T.activity.result(events, 100 * correct / Math.max(1, correctCounts.length), { items: correctCounts, correctCount: correct, imitationErrors: p.level === 1 ? 0 : correctCounts.filter((item) => item.count === item.target).length, level: p.level });
+      return T.activity.result(events, 100 * correct / Math.max(1, correctCounts.length), { items: correctCounts, correctCount: correct, imitationErrors: p.level === 1 ? 0 : correctCounts.filter((item) => item.count === item.target).length, level: p.level, practice });
     })();
   },
   simulate(p) {

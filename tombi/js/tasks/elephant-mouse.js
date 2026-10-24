@@ -8,6 +8,7 @@ T.tasks.register({
   run(ctx, p) {
     return (async () => {
       await T.activity.start(ctx, { title: 'רגלי פיל ורגלי עכבר', picture: 'foot', intro: 'elephant_intro', instruction: 'elephant_go' });
+      const practice = p.isNew ? await T.activity.practice(ctx, () => T.audio.sim.stomp(250, 0.55), { minIoiMs: 220, minAboveFloor: 6 }) : null;
       const durationMs = p.short ? 5000 : 7000;
       const started = T.audio.now();
       const events = await T.activity.collect(ctx, { durationMs, minIoiMs: 220, minAboveFloor: 6, simulate: () => T.tasks.get('elephantMouse').simulate({ ...p, durationMs }) });
@@ -33,7 +34,7 @@ T.tasks.register({
       const score = 100 * (0.5 * Math.min(1, Math.max(0, contrast) / 12) + 0.3 * Math.max(0, (separation - 0.5) / 0.5) + 0.2 * Math.max(0, 1 - spread / 6));
       await ctx.say(T.activity.line('elephant_mouse', ctx), `elephant_mouse_${ctx.child.gender}_${ctx.nonverbal ? 'nv' : 'v'}`);
       await ctx.say(T.activity.line('elephant_praise3', ctx), `elephant_praise3_${ctx.child.gender}_${ctx.nonverbal ? 'nv' : 'v'}`);
-      return T.activity.result(events, score, { elephantDb, mouseDb, contrastDb: contrast, separation, spreadDb: spread, seated: p.seated, level: p.level });
+      return T.activity.result(events, score, { elephantDb, mouseDb, contrastDb: contrast, separation, spreadDb: spread, seated: p.seated, level: p.level, practice });
     })();
   },
   simulate(p = {}) {

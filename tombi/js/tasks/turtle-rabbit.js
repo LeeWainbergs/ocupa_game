@@ -9,6 +9,7 @@ T.tasks.register({
     return (async () => {
       const phaseMs = p.short ? Math.min(3500, p.phaseMs) : p.phaseMs;
       await T.activity.start(ctx, { title: 'צב וארנב', picture: 'animals', intro: 'turtle_intro', instruction: 'turtle_go' });
+      const practice = p.isNew ? await T.activity.practice(ctx, () => T.audio.sim.stomp(250, 0.42), { minIoiMs: 220, minAboveFloor: 9 }) : null;
       const started = T.audio.now();
       const events = await T.activity.collect(ctx, {
         durationMs: phaseMs * 2 + 500,
@@ -29,7 +30,7 @@ T.tasks.register({
       const score = 100 * (0.6 * Math.min(1, Math.max(0, slowRatio - 1)) + 0.25 * hold + 0.15 * Math.max(0, 1 - slowCv / 0.5));
       await ctx.say(T.activity.line('turtle_slow', ctx), `turtle_slow_${ctx.child.gender}_${ctx.nonverbal ? 'nv' : 'v'}`);
       await ctx.say(T.activity.line('turtle_praise3', ctx), `turtle_praise3_${ctx.child.gender}_${ctx.nonverbal ? 'nv' : 'v'}`);
-      return T.activity.result(events, score, { smtMs: smt, slowRatio, slowCv, hold, seated: p.seated, level: p.level });
+      return T.activity.result(events, score, { smtMs: smt, slowRatio, slowCv, hold, seated: p.seated, level: p.level, practice });
     })();
   },
   simulate(p) {

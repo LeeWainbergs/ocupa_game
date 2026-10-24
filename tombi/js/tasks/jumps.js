@@ -8,6 +8,7 @@ T.tasks.register({
   run(ctx, p) {
     return (async () => {
       await T.activity.start(ctx, { title: 'קפיצות הדרקון', picture: 'cloud', intro: 'jump_intro', instruction: 'jump_go' });
+      const practice = p.isNew ? await T.activity.practice(ctx, () => T.audio.sim.jumpLanding(250, 0.45), { minIoiMs: 300, minAboveFloor: 12 }) : null;
       const events = await T.activity.collect(ctx, { durationMs: 7000, minIoiMs: 300, minAboveFloor: 12, simulate: () => T.tasks.get('jumps').simulate(p) });
       const landings = T.dsp.mergeLandings(events.filter((event) => event.cls === 'landing' || event.cls === 'stomp' || event.cls === 'ball'), 120);
       const target = p.target, countErr = Math.abs(landings.length - target), overshoot = Math.max(0, landings.length - target);
@@ -16,7 +17,7 @@ T.tasks.register({
       const cv = iois.length && mean ? Math.sqrt(iois.reduce((sum, value) => sum + (value - mean) ** 2, 0) / iois.length) / mean : 0;
       const score = 100 * (0.5 * Math.max(0, 1 - countErr / target) + 0.2 * (overshoot === 0 ? 1 : 0) + 0.3 * Math.max(0, 1 - cv / 0.4));
       await ctx.say(T.activity.line('jump_praise3', ctx), `jump_praise3_${ctx.child.gender}_${ctx.nonverbal ? 'nv' : 'v'}`);
-      return T.activity.result(landings, score, { count: landings.length, target, countErr, overshoot, cvIoi: cv, level: p.level });
+      return T.activity.result(landings, score, { count: landings.length, target, countErr, overshoot, cvIoi: cv, level: p.level, practice });
     })();
   },
   simulate(p) { for (let i = 0; i < p.target; i++) T.audio.sim.jumpLanding(250 + i * (p.intervalMs || 650), 0.55); },

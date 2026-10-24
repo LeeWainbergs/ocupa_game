@@ -20,6 +20,14 @@ T.session = (() => {
     while (performance.now() < end) { await check(); await sleep(Math.min(80, end - performance.now())); }
     await check();
   }
+  async function pace(ms) {
+    const end = performance.now() + ms;
+    while (performance.now() < end) {
+      while (paused && !abortFlag) await sleep(120);
+      if (abortFlag) throw ABORT;
+      await sleep(Math.min(80, end - performance.now()));
+    }
+  }
   async function say(text, key) {
     await check();
     if (key && T.lines) {
@@ -218,7 +226,9 @@ T.session = (() => {
       }
       stageHeader(task, i);
       const key = task.key;
-      const level = T.levels.NAMES[key] ? T.levels.get(c, key) : null;
+      const priorSessions = T.store.sessionsOf(c.id);
+      const isNewTask = T.planner && T.planner.isNewTask(key, c, priorSessions);
+      const level = T.levels.NAMES[key] ? isNewTask ? 1 : T.levels.get(c, key) : null;
       try {
         if (entry.optional && planBudgetExceeded(startT, rec.setting)) {
           rec.stages[key] = { skipped: true, score: null, short: !!entry.short, reason: 'חריגה מתקציב הזמן', ...(level ? { level } : {}) };
@@ -227,7 +237,14 @@ T.session = (() => {
         }
         const params = task.params(level || 1, c.age, c);
         params.short = !!entry.short;
+        params.isNew = !!isNewTask;
+        const taskStartedAt = performance.now();
         const r = await task.run(taskContext(), params);
+        if (T.audio.mode === 'sim') {
+          const plannedMs = task.durationSec[params.short ? 'short' : 'full'] * 1000;
+          await pace(Math.max(0, plannedMs - (performance.now() - taskStartedAt)));
+          if (plan.slice(i + 1).some((next) => !next.skip)) await pace(15000);
+        }
         if (r) {
           if (level && !r.level) r.level = level;
           r.short = !!params.short;

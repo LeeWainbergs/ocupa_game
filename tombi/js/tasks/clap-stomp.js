@@ -10,6 +10,7 @@ T.tasks.register({
       const sequence = p.short ? p.sequence.slice(0, 4) : p.sequence;
       const params = { ...p, sequence };
       await T.activity.start(ctx, { title: 'כף-רגל וסיר-שולחן', picture: p.level < 3 ? 'hands' : 'pot', intro: 'table_intro', instruction: 'table_go' });
+      const practice = p.isNew ? await T.activity.practice(ctx, () => T.audio.sim.clap(250, 0.45), { minIoiMs: 130, minAboveFloor: 9 }) : null;
       const events = await T.activity.collect(ctx, { durationMs: sequence.length * 700 + 700, minIoiMs: 130, minAboveFloor: 9, simulate: () => T.tasks.get('clapStomp').simulate(params) });
       const classes = events.map((event) => event.cls);
       const expected = sequence;
@@ -22,7 +23,7 @@ T.tasks.register({
       const cv = intervals.length && mean ? Math.sqrt(intervals.reduce((sum, value) => sum + (value - mean) ** 2, 0) / intervals.length) / mean : 1;
       const score = 100 * (0.6 * sequenceAccuracy + 0.25 * alternating + 0.15 * Math.max(0, 1 - cv / 0.4));
       await ctx.say(T.activity.line('table_praise3', ctx), `table_praise3_${ctx.child.gender}_${ctx.nonverbal ? 'nv' : 'v'}`);
-      return T.activity.result(events, score, { sequenceAccuracy, alternating, cvIoi: cv, sequence: classes, confidentOnsets: confidentClasses.length, note: 'המחלקות אינן מזהות איזו יד הקישה', level: p.level });
+      return T.activity.result(events, score, { sequenceAccuracy, alternating, cvIoi: cv, sequence: classes, confidentOnsets: confidentClasses.length, note: 'המחלקות אינן מזהות איזו יד הקישה', level: p.level, practice });
     })();
   },
   simulate(p) {

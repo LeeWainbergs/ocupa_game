@@ -89,15 +89,26 @@ T.levels = (() => {
     }
     if (task === 'loudness') return { targetDb: lv === 1 ? 6 : lv === 2 ? 8 : 10, compareCat: lv >= 4, holdSeconds: lv === 5 ? 2 : 0, tunnel: lv >= 3, level: lv };
     if (task === 'magic') {
-      const targets = new Set([4, 6, 9, 11]);
-      const traps = new Set([7]);
-      const story = Array.from({ length: 12 }, (_, index) => {
-        const number = index + 1;
-        return [T.lines.get(`magic_story_${number}`, child && child.gender, child && child.nonverbal), targets.has(number) ? 1 : 0, traps.has(number) ? 1 : 0, `magic_story_${number}`];
+      const goPattern = [true, true, false, true, true, false, true, true, true, false, true, true];
+      const items = goPattern.map((go, index) => {
+        const rule = index < 6 ? 'star' : 'moon';
+        const targetSound = rule === 'star' ? 'bell' : 'drum';
+        if (lv === 1) return { go, kind: 'word', word: 'צפרדע', voice: go ? 'normal' : 'sleepy', rule };
+        if (lv === 2) return { go, kind: 'word', word: go ? 'צפרדע' : (index % 2 ? 'צב' : 'צפרדה'), voice: 'normal', rule };
+        if (lv === 3 || lv === 4) {
+          return { go, kind: 'sound', sound: go ? 'bell' : (index % 2 ? 'drum' : 'chirp'), rule };
+        }
+        return { go, kind: 'sound', sound: go ? targetSound : (targetSound === 'bell' ? 'drum' : 'bell'), rule };
       });
-      return { story, responseMs: lv === 1 ? 3500 : lv === 2 ? 3000 : lv === 3 ? 2600 : 2200, speechRate: lv >= 4 ? 1.12 : 1, level: lv };
+      return {
+        items, responseMs: 2500, irregular: lv >= 4,
+        ruleSwitch: lv >= 5, level: lv,
+      };
     }
-    if (task === 'snake') return { targetSeconds: Math.min(12, Math.max(3, (Number(child && child.age) || 5) + 1) + (lv - 1)), level: lv };
+    if (task === 'snake') return {
+      targetSeconds: Math.min(12, Math.max(3, (Number(child && child.age) || 5) + 1) + (lv - 1)),
+      mode: lv >= 4 ? 'stop-cue' : 'capacity', level: lv,
+    };
     if (task === 'stompFreeze') return { level: lv, freezes: lv === 1 ? 2 : 3, freezeMs: lv === 1 ? 2000 : lv === 5 ? 5000 : lv === 2 ? 3000 : 4000, seated: child && child.canStand === false };
     if (task === 'jumps') return { level: lv, target: lv === 1 ? 3 : 5, intervalMs: lv >= 3 ? 800 : null };
     if (task === 'reverseDrum') return { level: lv, items: lv === 1 ? 8 : 16, sequence: [2, 1, 2, 2, 1, 1, 1, 2, 1, 2, 2, 1, 1, 2] };
@@ -105,7 +116,15 @@ T.levels = (() => {
     if (task === 'clapStomp') return { level: lv, sequence: lv < 3 ? ['clap', 'stomp', 'clap', 'stomp', 'clap', 'stomp'] : ['pot', 'table', 'pot', 'table', 'pot', 'table'] };
     if (task === 'ball') return { level: lv, target: lv < 3 ? 4 : 6 };
     if (task === 'elephantMouse') return { level: lv, seated: child && child.canStand === false };
-    if (task === 'march') return { level: lv, age: Number(child && child.age) || 5, ibi: (Number(child && child.age) || 5) < 5 ? 425 : 500, count: lv < 3 ? 8 : 12, seated: child && child.canStand === false };
+    if (task === 'march') {
+      const age = Number(child && child.age) || 5;
+      return {
+        level: lv, age, ibi: age < 5 ? 425 : 500, count: lv < 3 ? 8 : 12,
+        tempoShiftMs: lv >= 4 ? (age < 5 ? 50 : 60) : 0,
+        antiPhase: lv >= 5 && age >= 5,
+        seated: child && child.canStand === false,
+      };
+    }
     throw new Error(`Unknown task parameters: ${task}`);
   }
 

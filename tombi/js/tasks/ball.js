@@ -8,6 +8,7 @@ T.tasks.register({
   run(ctx, p) {
     return (async () => {
       await T.activity.start(ctx, { title: 'כדור הדרקון', picture: 'egg', intro: 'ball_intro', instruction: 'ball_go' });
+      const practice = p.isNew ? await T.activity.practice(ctx, () => T.audio.sim.ball(250, 0.42), { minIoiMs: 200, minAboveFloor: 10 }) : null;
       const events = await T.activity.collect(ctx, { durationMs: p.short ? 5000 : 8000, minIoiMs: 200, minAboveFloor: 10, simulate: () => T.tasks.get('ball').simulate(p) });
       const fell = T.dsp.ballFell(events);
       const iois = events.slice(1).map((event, i) => event.t - events[i].t);
@@ -17,7 +18,7 @@ T.tasks.register({
       const sd = levels.length ? Math.sqrt(levels.reduce((sum, value) => sum + (value - avg) ** 2, 0) / levels.length) : 10;
       const score = 100 * (0.6 * Math.min(1, events.length / p.target) + 0.2 * Math.max(0, 1 - cv / 0.4) + 0.2 * Math.max(0, 1 - sd / 6));
       await ctx.say(T.activity.line('ball_praise3', ctx), `ball_praise3_${ctx.child.gender}_${ctx.nonverbal ? 'nv' : 'v'}`);
-      return T.activity.result(events, score, { streak: fell ? Math.min(events.length, 2) : events.length, target: p.target, ballFell: fell, cvIoi: cv, peakDbSd: sd, level: p.level });
+      return T.activity.result(events, score, { streak: fell ? Math.min(events.length, 2) : events.length, target: p.target, ballFell: fell, cvIoi: cv, peakDbSd: sd, level: p.level, practice });
     })();
   },
   simulate(p) {
