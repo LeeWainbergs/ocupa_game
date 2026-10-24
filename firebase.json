@@ -1,0 +1,13 @@
+{
+  "hosting": {
+    "public": "tombi",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "dev/**",
+      "docs/**",
+      "README.md"
+    ]
+  }
+}
