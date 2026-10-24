@@ -632,13 +632,13 @@
     if (!entry) return;
     if (target.matches('[data-plan-task]')) {
       const task = T.tasks.get(target.value);
-      if (task && !T.planner.canReplace(currentPlan.tasks, index, task.key, current, setting, T.store.sessionsOf(current.id))) {
+      if (task && !T.planner.canReplace(currentPlan.tasks, index, task.key, current, currentPlan.setting, T.store.sessionsOf(current.id))) {
         target.value = entry.key;
         $('#plan-warning').textContent = 'המשימה אינה מתאימה לתנאי המפגש או יוצרת רצף תנועה לא מאוזן. התוכנית הקודמת נשמרה.';
         $('#plan-warning').hidden = false;
         return;
       }
-      if (task && T.planner.canReplace(currentPlan.tasks, index, task.key, current, currentPlan.setting, T.store.sessionsOf(current.id))) {
+      if (task) {
         const goals = T.goals.goalsForTask(current, task.key, true);
         Object.assign(entry, {
           key: task.key, name: task.name, domain: task.domain,
