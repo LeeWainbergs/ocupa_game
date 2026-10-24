@@ -35,7 +35,7 @@ T.sync = (() => {
   async function apiRequest(path, token, init = {}) {
     if (!apiBase()) throw new Error('כתובת ה-API לא הוגדרה.');
     const freshToken = window.TOMBI_AUTH ? await window.TOMBI_AUTH.getIdToken() : '';
-    token = freshToken || token;
+    token = freshToken;
     if (!token) throw new Error('צריך להתחבר לחשבון כדי לסנכרן.');
     const response = await fetch(`${apiBase()}${path}`, {
       ...init,
@@ -105,10 +105,12 @@ T.sync = (() => {
   function resetParentLevels() {
     if (!parentMode) return;
     try {
-      const approved = JSON.parse(sessionStorage.getItem(`tombi.parent.levels.${parentChildId}`) || '{}');
+      const savedLevels = sessionStorage.getItem(`tombi.parent.levels.${parentChildId}`);
+      if (savedLevels === null) return;
+      const approved = JSON.parse(savedLevels);
       const child = T.store.getChild(parentChildId);
-      if (child && approved && Object.keys(approved).length) {
-        child.levels = { ...child.levels, ...approved };
+      if (child && approved && typeof approved === 'object' && !Array.isArray(approved)) {
+        child.levels = { ...approved };
         T.store.save();
       }
     } catch (error) {
@@ -158,6 +160,15 @@ T.sync = (() => {
       return;
     }
     staffPatients = await apiRequest('/v1/game/patients', token);
+    for (const remote of staffPatients) {
+      if (remote.linked_game_child_id && remote.profile && !T.store.getChild(remote.linked_game_child_id)) {
+        T.store.addChild({
+          ...remote.profile,
+          id: remote.linked_game_child_id,
+          name: remote.display_name || remote.profile.display_name || '',
+        });
+      }
+    }
     for (const child of T.store.data.children) {
       const remote = staffPatients.find((patient) => patient.linked_game_child_id === child.id);
       if (!remote) continue;
@@ -451,7 +462,14 @@ T.sync = (() => {
   async function start() {
     if (parentMode) {
       staffToken = '';
+      if (!clientReady()) return;
       try {
+        const token = await window.TOMBI_AUTH.getIdToken();
+        if (!token) {
+          sessionStorage.removeItem('tombi.parent.token');
+          throw new Error('צריך להתחבר מחדש דרך מסך ההורים כדי לסנכרן.');
+        }
+        sessionStorage.setItem('tombi.parent.token', token);
         await flushLocalSessions();
       } catch (error) {
         setStatus(error.message || 'המפגש נשמר במכשיר אך טרם הסתנכרן.', true);

@@ -7,6 +7,9 @@
   const escHome = (s) => esc(stripHomeEmoji(s));
   const IMG = window.TOMBI_IMG || 'assets/tombi.jpg';
   const DEMO = !!window.TOMBI_DEMO; // the online demo: no microphone, no printing or file downloads
+  const parentChildId = new URLSearchParams(window.location.search).get('parent');
+  const PARENT_MODE = !!parentChildId;
+  window.TOMBI_PARENT_MODE = PARENT_MODE;
   T.store.load();
   $$('[data-tombi-home]').forEach((img) => { img.src = IMG; });
   const homeHeader = $('#screen-home .topbar');
@@ -40,6 +43,7 @@
 
   // ---------- routing ----------
   function show(name) {
+    if (PARENT_MODE && !['prep', 'game', 'done'].includes(name)) name = 'prep';
     $$('.screen').forEach((s) => (s.hidden = s.id !== 'screen-' + name));
     $('#adult-shell').classList.toggle('is-game', name === 'game');
     const labels = { home: 'טומבי', child: 'פרטי ילד', prep: 'הכנה למפגש', done: 'סיכום מפגש', report: 'דוח התקדמות', settings: 'הגדרות' };
@@ -996,6 +1000,7 @@
 
   // ---------- settings ----------
   function renderSettings() {
+    if (T.sync) T.sync.renderStaffPanel();
     const vs = T.tombi.loadVoices();
     const sel = $('#s-voice');
     sel.innerHTML = vs.length ? vs.map((v) => `<option value="${esc(v.voiceURI)}">${esc(v.name)}</option>`).join('') : '<option value="">אין קול עברי בדפדפן הזה</option>';
@@ -1085,4 +1090,14 @@
 
   // first screen
   show('home');
+  if (PARENT_MODE) {
+    document.body.classList.add('tombi-parent-mode');
+    const linkedChild = T.store.getChild(parentChildId);
+    if (!linkedChild) {
+      document.body.innerHTML = '<main class="tombi-parent-error" dir="rtl"><h1>לא נמצא פרופיל המשחק המקושר</h1><p>חזרו לקישור שקיבלתם מהצוות והיכנסו שוב.</p><a href="parent.html">חזרה למסך ההורים</a></main>';
+    } else {
+      openPrep(linkedChild);
+    }
+  }
+  if (T.sync) void T.sync.start();
 })();

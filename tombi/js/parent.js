@@ -3,7 +3,7 @@
   const apiBase = String(config.apiBaseUrl || '').replace(/\/+$/, '');
   const firebaseConfig = config.firebaseConfig || {};
   const clientConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId && firebaseConfig.appId);
-  const inviteCode = new URLSearchParams(window.location.search).get('invite') || '';
+  let inviteCode = new URLSearchParams(window.location.search).get('invite') || '';
   const previewMode = new URLSearchParams(window.location.search).get('preview') === '1';
   const message = document.getElementById('parent-message');
   const login = document.getElementById('parent-login');
@@ -23,7 +23,7 @@
   async function request(path, init = {}) {
     if (!apiBase) throw new Error('החיבור לענן עדיין לא הוגדר. פנו לצוות.');
     const freshToken = window.TOMBI_AUTH ? await window.TOMBI_AUTH.getIdToken() : '';
-    authToken = freshToken || authToken;
+    authToken = freshToken;
     if (!authToken) throw new Error('צריך להתחבר לחשבון כדי להמשיך.');
     const response = await fetch(`${apiBase}${path}`, {
       ...init,
@@ -203,11 +203,13 @@
         const url = new URL(window.location.href);
         url.searchParams.delete('invite');
         window.history.replaceState({}, '', url);
+        inviteCode = '';
         if (accepted.invitation_type === 'staff') {
           sessionStorage.setItem('tombi.staff.token', token);
           setMessage('הזמנת איש/אשת צוות אושרה. אפשר לחזור למשחק ולהתחבר במסך הסנכרון.');
           login.textContent = 'מעבר למשחק';
           login.disabled = false;
+          login.removeEventListener('click', signIn);
           login.onclick = () => { window.location.href = 'index.html'; };
           return;
         }

@@ -1,7 +1,8 @@
 /* storage.js — ילדים, מפגשים והגדרות. נשמר רק בדפדפן הזה (localStorage).
    אין כאן אודיו: רק מספרים, וכן "טביעות קול" (MFCC) של 3 המילים לזיהוי צב/דג/קוף. */
 T.store = (() => {
-  const KEY = 'tombi.v1';
+  const parentChildId = new URLSearchParams(window.location.search).get('parent');
+  const KEY = parentChildId ? `tombi.parent.v1.${encodeURIComponent(parentChildId)}` : 'tombi.v1';
   let data = { children: [], sessions: [], settings: {} };
   let memoryOnly = false;
 
@@ -39,7 +40,20 @@ T.store = (() => {
   }
   const getChild = (id) => data.children.find((c) => c.id === id);
   const sessionsOf = (id) => data.sessions.filter((s) => s.childId === id).sort((a, b) => a.date - b.date);
-  function addSession(s) { s.id = s.id || uid(); data.sessions.push(s); save(); return s; }
+  function addSession(s) {
+    s.id = s.id || uid(); data.sessions.push(s); save();
+    if (T.sync && typeof T.sync.sessionAdded === 'function') {
+      queueMicrotask(() => T.sync.sessionAdded(s));
+    }
+    return s;
+  }
+  function mergeSyncedSession(s) {
+    if (!s || !s.cloudSessionId || data.sessions.some((session) => session.cloudSessionId === s.cloudSessionId)) return;
+    data.sessions.push(s);
+    const uploaded = data.settings.cloudUploadedSessions || (data.settings.cloudUploadedSessions = {});
+    uploaded[s.id] = true;
+    save();
+  }
   function removeSession(id) { data.sessions = data.sessions.filter((s) => s.id !== id); save(); }
 
   function addTemplate(childId, word, feats) {
@@ -83,7 +97,7 @@ T.store = (() => {
   }
 
   return {
-    load, save, uid, addChild, updateChild, removeChild, getChild, sessionsOf, addSession, removeSession,
+    load, save, uid, addChild, updateChild, removeChild, getChild, sessionsOf, addSession, mergeSyncedSession, removeSession,
     addTemplate, setSoundCentroids, exportJSON, importJSON,
     get data() { return data; }, get settings() { return data.settings; }, get memoryOnly() { return memoryOnly; },
   };

@@ -30,9 +30,9 @@ window.TOMBI_AUTH = (() => {
     if (!firstStatePromise) {
       firstStatePromise = new Promise((resolve, reject) => {
         const unsubscribe = auth.onAuthStateChanged(
-          (user) => {
+          () => {
             unsubscribe();
-            resolve(user);
+            resolve();
           },
           (error) => {
             unsubscribe();
@@ -41,7 +41,8 @@ window.TOMBI_AUTH = (() => {
         );
       });
     }
-    return firstStatePromise;
+    await firstStatePromise;
+    return auth.currentUser;
   }
 
   async function signInWithGoogle() {
