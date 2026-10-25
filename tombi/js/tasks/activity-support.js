@@ -17,6 +17,9 @@ T.activity = (() => {
       candle: '<path d="M35 42h30v36H35Z" fill="#f5d88b" stroke="#a98243" stroke-width="3"/><path d="M50 10c14 16 4 22 0 25-11-9-8-18 0-25Z" fill="#ffc66c" stroke="#d78b3c" stroke-width="2"/>',
       tunnel: '<path d="M17 75V50a33 33 0 0 1 66 0v25Z" fill="#385f50"/><path d="M34 75V50a16 16 0 0 1 32 0v25Z" fill="#ffe3a2"/>',
       foot: '<path d="M41 72c-9-2-11-10-5-17 4-5 5-17 12-19 8-2 10 13 14 20 5 9-7 19-21 16Z" fill="#efc6a5" stroke="#976d55" stroke-width="3"/>',
+      crystal: '<path d="M38 78h24V58H38Z" fill="#b9e3f0" stroke="#4f8fa3" stroke-width="3"/><path d="M40 56h20V38H40Z" fill="#cdeaf4" stroke="#4f8fa3" stroke-width="3"/><path d="M50 14 62 36H38Z" fill="#e2f4fa" stroke="#4f8fa3" stroke-width="3" stroke-linejoin="round"/>',
+      potion: '<path d="M43 18h14v18l15 22a14 14 0 0 1-12 22H40a14 14 0 0 1-12-22l15-22Z" fill="#e8f1ee" stroke="#527078" stroke-width="3" stroke-linejoin="round"/><path d="M31 60h38l2 4a10 10 0 0 1-9 12H38a10 10 0 0 1-9-12Z" fill="#9fd3c0"/>',
+      heart: '<path d="M50 78C30 63 20 52 20 39a14 14 0 0 1 30-6 14 14 0 0 1 30 6c0 13-10 24-30 39Z" fill="#f2a9a0" stroke="#a85a52" stroke-width="3" stroke-linejoin="round"/>',
     };
     return `<svg class="activity-picture" viewBox="0 0 100 100" role="img" aria-label="${kind}">${shapes[kind] || shapes.foot}</svg>`;
   }
@@ -24,6 +27,7 @@ T.activity = (() => {
   async function collect(ctx, { durationMs, minIoiMs = 130, minAboveFloor = 10, simulate, drainMs = 420 }) {
     const events = [];
     let cutoff = Infinity;
+    const wasFloorFrozen = T.audio.floorFrozen;
     T.onsets.configure({ minIoiMs, minAboveFloor, floorFrozen: true });
     const off = T.onsets.on((event) => {
       if (event.t > cutoff) return;
@@ -42,14 +46,14 @@ T.activity = (() => {
       return events;
     } finally {
       off();
-      T.onsets.configure({ floorFrozen: false });
+      T.onsets.configure({ floorFrozen: wasFloorFrozen });
       T.ui.onsetRepeat(false);
     }
   }
 
   async function start(ctx, { title, picture: visual, intro, instruction }) {
     await T.audio.calibrateTaskFloor();
-    T.audio.setOnsetConfig({ centroids: ctx.child.soundCentroids || {}, floorFrozen: false });
+    T.audio.setOnsetConfig({ centroids: ctx.child.soundCentroids || {}, floorFrozen: true });
     const childPicture = document.getElementById('activity-picture');
     childPicture.innerHTML = picture(visual);
     childPicture.hidden = false;

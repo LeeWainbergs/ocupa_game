@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test cloud sync
-        run: node --test tombi/dev/cloud-sync.test.cjs
+        run: node --test tombi/dev/cloud-sync.test.cjs tombi/dev/build-site.test.cjs
   deploy:
     needs: test
     environment:
@@ -35,12 +35,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build versioned site
+        run: node tombi/dev/build-site.cjs "${{ runner.temp }}/tombi-site"
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload site
         uses: actions/upload-pages-artifact@v4
         with:
-          path: tombi
+          path: ${{ runner.temp }}/tombi-site
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4

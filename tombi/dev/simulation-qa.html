@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>סימולציית טומבי</title>
+  <style>
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #14251f; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+  </style>
+  <script>window.T = {};</script>
+  <script src="../js/tombi.js?v=20261024-mouth-layer-fix"></script>
+</head>
+<body>
+  <canvas id="avatar"></canvas>
+  <script>
+    T.tombi.mount(document.getElementById('avatar'), '../assets/tombi.jpg').then(() => {
+      T.tombi.setSimulationMode(true);
+    }).catch((error) => {
+      document.body.textContent = `לא ניתן לטעון את הסימולציה: ${error.message}`;
+      console.error(error);
+    });
+  </script>
+</body>
+</html>

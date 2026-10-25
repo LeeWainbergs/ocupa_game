@@ -114,14 +114,14 @@ Create `js/planner.js` with `T.planner.build(child, setting, history, opts) → 
 | # | Slot | Candidates | Fixed? |
 |---|---|---|---|
 | 0 | "טומבי מתעורר": floor, loopback, show 3 stomps / 3 claps / normal voice | calibration | always, ~40 s, not scored |
-| 1 | core: engine check | `engineStart` | always |
+| 1 | core: mood check and child-chosen dragon breaths | `engineStart` | always |
 | 2 | rhythm (organize) | `march`, `echo`, `clapStomp` | pick 1 |
 | 3 | arousal + motor inhibition | `stompFreeze`, `jumps` | pick 1 |
 | 4 | inhibition | `magic`, `reverseDrum` | pick 1 |
 | 5 | grading | `loudness` (incl. tunnel levels), `elephantMouse`, `ball` | pick 1, optional |
 | 6 | transition | `turtleRabbit` (turtle part only, short) | always, ~40 s |
 | 7 | calm | `snake` | always |
-| 8 | core: engine check again | `engineEnd` | always |
+| 8 | core: separate closing mood check | `engineEnd` | always |
 
 ### C.2 Hard filters (a candidate is not eligible if…)
 - Child is nonverbal and the task has no `nonverbal` mode.
@@ -146,7 +146,7 @@ Take the highest P per slot.
 - Task length inside: no task longer than 2 min. Trials per task are capped by the task's `short`/`full` params.
 
 ### C.5 Adaptation during the session
-- **After engine check at the start**: if the child chose **monkey** (too fast), swap slot 3 to `stompFreeze` with long freezes (not `jumps`), use the lower-arousal option in slot 2, and add one extra snake trial. If **turtle** (slow), prefer `jumps` or `march` (alerting) and keep slot 5. Fish: keep the plan. Record the swap reason in `rec.plan`.
+- The opening mood choice is a child self-report; do not interpret it, score it, or use it to change the planned activities.
 - If a task scores < 30, or the aide logged ≥ 3 model/physical assists in it, or it was skipped, the next non-core task switches to its `short` version.
 - If two tasks were skipped, the aide panel offers "לעבור להרגעה" (jump to transition → snake → engine end).
 - If elapsed time > budget + 2 min, skip remaining optional slots automatically.
@@ -156,7 +156,7 @@ Use the existing per-child level rule from `docs/spec.md` (1-5 per task; up afte
 
 ### C.7 UI
 - **Before "start session"**: a "תוכנית המפגש" card (Ocupa style, `oc-` classes, in the aide/therapist screen, never in the child view):
-  - The planned tasks in order, each with its picture, name, level badge, minutes, and a reason chip ("לא שוחק 3 מפגשים", "חדש", "לחיזוק", "לפי בדיקת המנוע").
+  - The planned tasks in order, each with its picture, name, level badge, minutes, and a reason chip ("לא שוחק 3 מפגשים", "חדש", "לחיזוק").
   - For each slot: a dropdown to swap with another eligible task from that slot, a toggle to skip it, a pin to keep it in future sessions.
   - Total time bar (green ≤ budget, orange over).
   - Setting: room type (קליניקה / בית / גן), equipment checkboxes (רצפה קשה, מקום פנוי 1.5 מ׳, סיר, כדור), budget 6/9/12.

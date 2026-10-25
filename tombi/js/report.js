@@ -1,8 +1,9 @@
 /* report.js — דוח התקדמות למטפלת ולהורים: משפטי סיכום, גרפים וטבלת מפגשים */
 T.report = (() => {
-  const ENG_LEVEL = { turtle: 0, fish: 1, monkey: 2 };
-  const ENG_NAME = { turtle: 'צב', fish: 'דג', monkey: 'קוף' };
-  const ENG_AS = { turtle: 'כצב', fish: 'כדג', monkey: 'כקוף' };
+  const FEELING_NAMES = {
+    happy: 'שמחה', calm: 'רוגע', tired: 'עייפות', sad: 'עצב',
+    worried: 'דאגה', angry: 'כעס', unsure: 'לא בטוח/ה', preferNot: 'לא רוצה לבחור',
+  };
   const ASSIST = { verbal: 'מילולית', model: 'הדגמה', physical: 'פיזית', gesture: 'רמז/הצבעה', repeat: 'חזרה על הוראה' };
   const fmtDate = (t) => new Date(t).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
   const fmtDateLong = (t) => new Date(t).toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -10,58 +11,163 @@ T.report = (() => {
   const num = (v, d = 1) => (v === null || v === undefined || isNaN(v) ? '—' : (+v).toFixed(d).replace(/\.0$/, ''));
   const st = (s, k) => (s.stages && s.stages[k] && !s.stages[k].skipped ? s.stages[k] : null);
   const realAssists = (s) => (s.assists || []).filter((a) => a.type !== 'repeat');
+  const mean = (values) => {
+    const valid = values.filter(Number.isFinite);
+    return valid.length ? valid.reduce((sum, value) => sum + value, 0) / valid.length : null;
+  };
+  const TASK_RAW_METRICS = {
+    stompFreeze: [
+      ['עצירות תקינות %', (r) => Number.isFinite(r.freezeOK) ? r.freezeOK * 100 : null],
+      ['תגובות בהקפאה', (r) => r.freezeEvents],
+      ['השהיית עצירה מ״ש', (r) => r.stopLatMs],
+      ['השהיית חידוש ממוצעת מ״ש', (r) => mean(r.restartLatMs || [])],
+      ['השתתפות %', (r) => Number.isFinite(r.engage) ? r.engage * 100 : null],
+    ],
+    jumps: [
+      ['נחיתות', (r) => r.count],
+      ['יעד נחיתות', (r) => r.targetTotal],
+      ['שגיאת ספירה', (r) => r.countErr],
+      ['נחיתות עודפות', (r) => r.overshoot],
+      ['מקדם שונות IOI', (r) => r.cvIoi],
+    ],
+    reverseDrum: [
+      ['מצב', (r) => r.mode === 'reverse' ? 'היפוך' : r.mode === 'imitation' ? 'חיקוי' : null],
+      ['נכונים מתוך מנוקדים', (r) => Number.isFinite(r.correctCount) && Number.isFinite(r.scoredItemCount) ? `${r.correctCount}/${r.scoredItemCount}` : null],
+      ['נכונים בטרום־מבחן', (r) => r.pretestCorrectCount],
+      ['שגיאות חיקוי', (r) => r.imitationErrors],
+      ['שגיאות אחרות', (r) => r.otherErrors],
+    ],
+    turtleRabbit: [
+      ['קצב ארנב מ״ש', (r) => r.smtMs],
+      ['יחס האטה', (r) => r.slowRatio],
+      ['מקדם שונות צב', (r) => r.slowCv],
+      ['שמירת האטה %', (r) => Number.isFinite(r.hold) ? r.hold * 100 : null],
+    ],
+    clapStomp: [
+      ['דיוק רצף %', (r) => Number.isFinite(r.sequenceAccuracy) ? r.sequenceAccuracy * 100 : null],
+      ['מעברים מתחלפים %', (r) => Number.isFinite(r.alternating) ? r.alternating * 100 : null],
+      ['מקדם שונות IOI', (r) => r.cvIoi],
+      ['onsets בטוחים', (r) => r.confidentOnsets],
+    ],
+    ball: [
+      ['רצף מרבי', (r) => r.streak],
+      ['זוהתה נפילה', (r) => typeof r.ballFell === 'boolean' ? (r.ballFell ? 'כן' : 'לא') : null],
+      ['מקדם שונות IOI', (r) => r.cvIoi],
+      ['סטיית עוצמה dB', (r) => r.peakDbSd],
+    ],
+    elephantMouse: [
+      ['פיל dB', (r) => r.elephantDb],
+      ['עכבר dB', (r) => r.mouseDb],
+      ['ניגוד dB', (r) => r.contrastDb],
+      ['הפרדה', (r) => r.separation],
+      ['פיזור dB', (r) => r.spreadDb],
+    ],
+    march: [
+      ['התאמת קצב', (r) => r.tempoMatch],
+      ['מקדם שונות ITI', (r) => r.cvIti],
+      ['אורך וקטור פאזה', (r) => r.phaseVectorLength],
+      ['אסינכרוניה ממוצעת מ״ש', (r) => r.meanAsynchronyMs],
+      ['פגיעות בחלון %', (r) => Number.isFinite(r.hitPercent) ? r.hitPercent * 100 : null],
+      ['צעדי המשך', (r) => r.continuationSteps],
+      ['סחיפת המשך מ״ש/צעד', (r) => r.continuationDriftMsPerStep],
+      ['צעדים להתאוששות מטמפו', (r) => r.tempoRecoverySteps],
+    ],
+    snake: [
+      ['משך ניסיונות ש׳', (r) => Array.isArray(r.durations) ? r.durations.join(' / ') : null],
+      ['סטיית תקן בין ניסיונות ש׳', (r) => r.trialSd],
+      ['יעד ש׳', (r) => r.targetSec],
+      ['יציבות dB', (r) => r.bestStabilityDb],
+      ['יחס סיבילנטיות', (r) => r.sibilanceRatio],
+      ['חזרות בגלל הפסקה', (r) => r.breakCount],
+      ['נקטע', (r) => typeof r.clipped === 'boolean' ? (r.clipped ? 'כן' : 'לא') : null],
+      ['חביון עצירה מ״ש', (r) => r.stopLatencyMs],
+      ['חביון עצירה לפי ניסיון מ״ש', (r) => Array.isArray(r.trialLatenciesMs) ? r.trialLatenciesMs.map((value) => value ?? '—').join(' / ') : null],
+      ['מדידות תקפות', (r) => r.nValid],
+    ],
+    crystalTower: [
+      ['קומות שדווחו', (r) => otMetric(r, 'floors_reported') !== null ? `${otMetric(r, 'floors_reported')}/${otMetric(r, 'floors_target')}` : null],
+      ['משך כולל ש׳', (r) => otMetric(r, 'total_duration_sec')],
+      ['זמן בין דיווחים ש׳', (r) => otList(r, 'inter_response_time_sec')],
+      ['זמן בנייה לקומה ש׳', (r) => otList(r, 'latency_sec')],
+      ['דיווחים ידניים', (r) => otMetric(r, 'floors_reported_by_aide')],
+      ['דיווחים שהחלו בזמן ההנחיה', (r) => otMetric(r, 'responses_sounding_at_window_open') || null],
+    ],
+    calmingPotion: [
+      ['נשיפה רציפה ארוכה ש׳', (r) => otMetric(r, 'duration_sec')],
+      ['משך לפי ניסיון ש׳', (r) => otList(r, 'exhale_duration_sec')],
+      ['יציבות עוצמה (0–1)', (r) => otMetric(r, 'audio_stability_score')],
+      ['יציבות גובה צליל (0–1)', (r) => otMetric(r, 'pitch_stability_score')],
+      ['הפסקות', (r) => otMetric(r, 'break_count_total')],
+    ],
+    emotionGuess: [
+      ['סיפורים עם תגובה', (r) => otMetric(r, 'stories_with_response') !== null ? `${otMetric(r, 'stories_with_response')}/${otMetric(r, 'stories_presented')}` : null],
+      ['זמן תגובה ש׳', (r) => otList(r, 'latency_sec')],
+      ['משך דיבור כולל ש׳', (r) => otMetric(r, 'vocal_engagement_sec')],
+      ['תגובות שהחלו בזמן ההנחיה', (r) => otMetric(r, 'responses_sounding_at_window_open') || null],
+      ['סימוני סייעת תואמים', (r) => otMetric(r, 'aide_coded_count') ? `${otMetric(r, 'aide_coded_match_count')}/${otMetric(r, 'aide_coded_count')}` : null],
+    ],
+  };
+  function otMetric(result, key) {
+    const value = result && result.ot && result.ot.metrics ? result.ot.metrics[key] : undefined;
+    return value === undefined ? null : value;
+  }
+  function otList(result, key) {
+    const values = otMetric(result, key);
+    return Array.isArray(values) && values.length ? values.map((value) => value ?? '—').join(' / ') : null;
+  }
+  function taskRawMetrics(key, result) {
+    return (TASK_RAW_METRICS[key] || []).map(([label, getValue]) => [label, getValue(result || {})]);
+  }
+  function rawSummary(key, result, limit = 2) {
+    return taskRawMetrics(key, result).filter(([, value]) => value !== null && value !== undefined && value !== '')
+      .slice(0, limit).map(([label, value]) => `${label}: ${formatMetric(value)}`).join(' · ');
+  }
+  const formatMetric = (value) => typeof value === 'number' ? num(value, 1) : String(value);
 
   function sentences(child, sessions) {
-    const G = (m, f) => (child.gender === 'f' ? f : m);
     const out = [];
     const last = sessions[sessions.length - 1], prev = sessions[sessions.length - 2];
     if (!last) return out;
 
-    // regulation (engine check at start and end)
-    const recent = sessions.slice(-5).filter((s) => st(s, 'engineStart')?.choice && st(s, 'engineEnd')?.choice);
-    if (recent.length) {
-      const count = {};
-      recent.forEach((s) => (count[s.stages.engineStart.choice] = (count[s.stages.engineStart.choice] || 0) + 1));
-      const S = Object.keys(count).sort((a, b) => count[b] - count[a])[0];
-      const n = recent.filter((s) => s.stages.engineStart.choice === S && s.stages.engineEnd.choice === 'fish').length;
-      let text;
-      if (S !== 'fish' && n > 0) text = `${G('התחיל', 'התחילה')} ${ENG_AS[S]} ו${G('סיים', 'סיימה')} כדג ב־${n} מתוך ${recent.length} המפגשים האחרונים`;
-      else {
-        const endC = {};
-        recent.forEach((s) => (endC[s.stages.engineEnd.choice] = (endC[s.stages.engineEnd.choice] || 0) + 1));
-        const E = Object.keys(endC).sort((a, b) => endC[b] - endC[a])[0];
-        text = `בתחילת המפגש בדרך כלל ${ENG_NAME[S]}, ובסיום בדרך כלל ${ENG_NAME[E]} (${recent.length} מפגשים אחרונים)`;
-      }
-      out.push({ domain: 'ויסות', text });
+    const startFeeling = FEELING_NAMES[st(last, 'engineStart')?.feeling];
+    const endFeeling = FEELING_NAMES[st(last, 'engineEnd')?.feeling];
+    if (startFeeling || endFeeling) {
+      out.push({
+        domain: 'מצב רגשי',
+        text: [
+          startFeeling && `בתחילת המפגש: ${startFeeling}`,
+          endFeeling && `בסיום: ${endFeeling}`,
+        ].filter(Boolean).join(' · '),
+      });
     }
     const L = st(last, 'loudness'), Lp = prev && st(prev, 'loudness');
-    if (L && L.ratio) out.push({ domain: 'הדרגת קול', text: `אריה חזק פי ${num(L.ratio)} מעכבר${Lp && Lp.ratio ? ` (במפגש הקודם פי ${num(Lp.ratio)})` : ''}` });
+    if (L && L.ratio) out.push({ domain: 'הפקת קול', text: `יחס העוצמה שנמדד בין קול חזק לחלש: ${num(L.ratio)}${Lp && Lp.ratio ? ` (במפגש הקודם: ${num(Lp.ratio)})` : ''}` });
     const M = st(last, 'magic'), Mp = prev && st(prev, 'magic');
-    if (M) out.push({ domain: 'לעצור ולחכות', text: `${M.falseAlarms} תגובות מיותרות מתוך ${M.nDistractors}${Mp ? ` (במפגש הקודם ${Mp.falseAlarms})` : ''}; ${M.hits} מתוך ${M.nTargets} ${M.targetWord ? `הופעות של המילה ${M.targetWord} זוהו` : 'צפרדעים נתפסו'}${M.meanRtMs ? `, זמן תגובה ממוצע ${num(M.meanRtMs / 1000)} שניות` : ''}` });
+    if (M) out.push({ domain: 'עיכוב תגובה וקשב שמיעתי', text: `${M.falseAlarms} תגובות שווא מתוך ${M.nDistractors}${Mp ? ` (במפגש הקודם: ${Mp.falseAlarms})` : ''}; זוהו ${M.hits} מתוך ${M.nTargets} ${M.targetWord ? `הופעות של מילת המטרה „${M.targetWord}”` : 'מטרות'}${M.meanRtMs ? `; זמן תגובה ממוצע: ${num(M.meanRtMs / 1000)} שניות` : ''}` });
     const S5 = st(last, 'snake'), S5p = prev && st(prev, 'snake');
-    if (S5) out.push({ domain: 'להחזיק צליל', text: `צליל סססס ממוצע של ${num(S5.mean)} שניות${S5p ? ` (במפגש הקודם ${num(S5p.mean)})` : ''}` });
+    if (S5) out.push({ domain: 'משך הפקת צליל', text: `משך ממוצע של ${num(S5.mean)} שניות${S5p ? ` (במפגש הקודם: ${num(S5p.mean)} שניות)` : ''}` });
     const E = st(last, 'echo'), Ep = prev && st(prev, 'echo');
-    if (E) out.push({ domain: 'לתפוס את הקצב', text: `${E.correctCount} מתוך ${E.trials.length} מקצבים בכמות הנכונה${E.meanDevMs !== null ? `, סטייה ממוצעת ${E.meanDevMs} מ״ש` : ''}${Ep ? ` (במפגש הקודם ${Ep.correctCount} מתוך ${Ep.trials.length})` : ''}` });
+    if (E) out.push({ domain: 'חיקוי תבניות קצב', text: `${E.correctCount} מתוך ${E.trials.length} תבניות בוצעו במספר הפעימות הנכון${E.meanDevMs !== null ? `; סטייה ממוצעת: ${E.meanDevMs} מ״ש` : ''}${Ep ? ` (במפגש הקודם: ${Ep.correctCount} מתוך ${Ep.trials.length})` : ''}` });
     const A = realAssists(last), Ap = prev ? realAssists(prev) : null;
     const byType = {};
     A.forEach((a) => (byType[a.type] = (byType[a.type] || 0) + 1));
     const parts = Object.entries(byType).map(([k, v]) => `${v} ${ASSIST[k] || k}`).join(', ');
-    out.push({ domain: 'עצמאות', text: A.length ? `הסייעת עזרה ${A.length === 1 ? 'פעם אחת' : A.length + ' פעמים'}: ${parts}${Ap ? ` (במפגש הקודם ${Ap.length})` : ''}` : `בלי עזרה של הסייעת${Ap && Ap.length ? ` (במפגש הקודם ${Ap.length})` : ''}` });
+    out.push({ domain: 'תמיכה במהלך המפגש', text: A.length ? `נרשמו ${A.length} אירועי סיוע: ${parts}${Ap ? ` (במפגש הקודם: ${Ap.length})` : ''}` : `לא נרשמו אירועי סיוע${Ap && Ap.length ? ` (במפגש הקודם: ${Ap.length})` : ''}` });
     return out;
   }
 
   // ---------- charts (inline SVG, single series each) ----------
-  function lineChart({ title, unit, sessions, value, fmt = (v) => num(v), yMax, yMin = 0, task }) {
+  function lineChart({ title, unit, sessions, value, fmt = (v) => num(v), yMax, yMin = 0, task, width = 340, height = 170, detail, showPointValues = false }) {
     const pts = sessions.map((s, i) => ({ i, s, v: value(s) })).filter((p) => p.v !== null && p.v !== undefined && !isNaN(p.v));
-    if (!pts.length) return `<figure class="chart"><figcaption>${esc(title)}</figcaption><p class="chart-empty">אין עדיין נתונים</p></figure>`;
-    const W = 340, H = 170, P = { l: 34, r: 14, t: 16, b: 28 };
+    const taskAttribute = task ? ` data-task="${esc(task)}"` : '';
+    if (!pts.length) return `<figure class="chart"${taskAttribute}><figcaption>${esc(title)}</figcaption><p class="chart-empty">אין עדיין מדידות בתחום הזה</p></figure>`;
+    const W = width, H = height, P = { l: width > 400 ? 44 : 34, r: 14, t: 20, b: 35 };
     const max = yMax ?? (Math.max(...pts.map((p) => p.v)) * 1.2 || 1);
     const n = sessions.length;
     const x = (i) => (n === 1 ? (P.l + W - P.r) / 2 : P.l + (i / (n - 1)) * (W - P.l - P.r));
     const y = (v) => H - P.b - ((v - yMin) / (max - yMin)) * (H - P.t - P.b);
     const ticks = [yMin, (yMin + max) / 2, max];
-    const path = pts.map((p, k) => `${k ? 'L' : 'M'}${x(p.i).toFixed(1)},${y(p.v).toFixed(1)}`).join('');
-    const area = pts.length > 1 ? `${path}L${x(pts[pts.length - 1].i).toFixed(1)},${y(yMin)}L${x(pts[0].i).toFixed(1)},${y(yMin)}Z` : '';
+    const path = pts.map((p, k) => `${k && p.i === pts[k - 1].i + 1 ? 'L' : 'M'}${x(p.i).toFixed(1)},${y(p.v).toFixed(1)}`).join('');
     const lastP = pts[pts.length - 1];
     const markers = task ? sessions.map((session, i) => {
       const stage = session.stages && session.stages[task];
@@ -69,56 +175,162 @@ T.report = (() => {
       if (!stage || !previous || (stage.level || 1) === (previous.level || 1)) return '';
       return `<g class="level-marker"><line x1="${x(i)}" x2="${x(i)}" y1="${P.t}" y2="${H - P.b}"/><text x="${Math.min(x(i) + 4, W - P.r - 48)}" y="${P.t + 11}">שלב ${stage.level || 1}</text></g>`;
     }).join('') : '';
-    return `<figure class="chart"><figcaption>${esc(title)}${unit ? ` <span class="unit">(${esc(unit)})</span>` : ''}</figcaption>
-      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}" direction="ltr">
+    const chartSummary = pts.map((point) => {
+      const stage = task && point.s.stages && point.s.stages[task];
+      const confidence = stage && Number.isFinite(stage.confidence) && stage.confidence < 0.6 ? ' · ביטחון זיהוי נמוך' : '';
+      return `${fmtDateLong(point.s.date)}: ${fmt(point.v)}${confidence}`;
+    }).join('; ');
+    return `<figure class="chart"${taskAttribute}><figcaption>${esc(title)}${unit ? ` <span class="unit">(${esc(unit)})</span>` : ''}</figcaption>
+      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`${title}. ${chartSummary}`)}" direction="ltr">
         ${ticks.map((t) => `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(t)}" y2="${y(t)}"/><text class="tick" x="${P.l - 6}" y="${y(t) + 4}" text-anchor="end">${fmt(t)}</text>`).join('')}
-        ${sessions.map((s, i) => (n <= 8 || i % Math.ceil(n / 8) === 0 || i === n - 1) ? `<text class="tick" x="${x(i)}" y="${H - 8}" text-anchor="middle">${fmtDate(s.date)}</text>` : '').join('')}
+        ${sessions.map((s, i) => (n <= 5 || i % Math.ceil(n / 4) === 0 || i === n - 1) ? `<text class="tick" x="${x(i)}" y="${detail ? H - 19 : H - 8}" text-anchor="middle">${fmtDate(s.date)}</text>${detail ? `<text class="tick chart-count" x="${x(i)}" y="${H - 4}" text-anchor="middle">מפגש ${i + 1} · ${detail(s).replace(' משימות', '')}</text>` : ''}` : '').join('')}
         ${markers}
-        ${area ? `<path class="area" d="${area}"/>` : ''}
         <path class="line" d="${path}"/>
         ${pts.map((p) => {
           const stage = task && p.s.stages && p.s.stages[task];
           const level = stage && (stage.level || 1);
-          return `<g class="pt"><circle cx="${x(p.i)}" cy="${y(p.v)}" r="12" class="hit"/><circle cx="${x(p.i)}" cy="${y(p.v)}" r="${p === lastP ? 5 : 3.5}" class="dot${p === lastP ? ' last' : ''}"/><title>${fmtDateLong(p.s.date)}: ${fmt(p.v)}${unit ? ' ' + unit : ''}${level ? ` · שלב ${level}` : ''}</title></g>`;
+          const label = detail ? ` · ${detail(p.s)}` : '';
+          const showValue = showPointValues && (n <= 6 || p.i % 2 === 0 || p.i === n - 1);
+          const lowConfidence = stage && Number.isFinite(stage.confidence) && stage.confidence < 0.6;
+          return `<g class="pt"><circle cx="${x(p.i)}" cy="${y(p.v)}" r="12" class="hit"/><circle cx="${x(p.i)}" cy="${y(p.v)}" r="${p === lastP ? 5 : 3.5}" class="dot${p === lastP ? ' last' : ''}${lowConfidence ? ' low-confidence' : ''}"/>${showValue ? `<text class="point-value" x="${x(p.i)}" y="${Math.max(P.t + 10, y(p.v) - 10)}" text-anchor="middle">${fmt(p.v)}</text>` : ''}<title>${fmtDateLong(p.s.date)}: ${fmt(p.v)}${unit ? ' ' + unit : ''}${level ? ` · שלב ${level}` : ''}${lowConfidence ? ' · ביטחון זיהוי נמוך' : ''}${label}</title></g>`;
         }).join('')}
-        <text class="endlabel" x="${Math.min(x(lastP.i), W - P.r - 2)}" y="${y(lastP.v) - 10}" text-anchor="${n === 1 ? 'middle' : 'end'}">${fmt(lastP.v)}${task && lastP.s.stages && lastP.s.stages[task] ? ` · שלב ${lastP.s.stages[task].level || 1}` : ''}</text>
+        ${detail || showPointValues ? '' : `<text class="endlabel" x="${Math.min(x(lastP.i), W - P.r - 2)}" y="${y(lastP.v) - 10}" text-anchor="${n === 1 ? 'middle' : 'end'}">${fmt(lastP.v)}${task && lastP.s.stages && lastP.s.stages[task] ? ` · שלב ${lastP.s.stages[task].level || 1}` : ''}</text>`}
       </svg></figure>`;
   }
 
-  function engineChart(sessions) {
-    const rows = sessions.filter((s) => st(s, 'engineStart')?.choice || st(s, 'engineEnd')?.choice);
-    if (!rows.length) return `<figure class="chart chart-wide"><figcaption>בדיקת מנוע: תחילת המפגש מול סופו</figcaption><p class="chart-empty">אין עדיין נתונים</p></figure>`;
-    const W = 700, H = 190, P = { l: 56, r: 16, t: 18, b: 28 };
-    const n = rows.length;
-    const x = (i) => (n === 1 ? (P.l + W - P.r) / 2 : P.l + 14 + (i / (n - 1)) * (W - P.l - P.r - 28));
-    const y = (lv) => H - P.b - (lv / 2) * (H - P.t - P.b);
-    const lv = (s, k) => (st(s, k)?.choice ? ENG_LEVEL[s.stages[k].choice] : null);
-    return `<figure class="chart chart-wide"><figcaption>בדיקת מנוע: תחילת המפגש מול סופו</figcaption>
-      <div class="legend"><span><i class="sw sw-start"></i>תחילת מפגש</span><span><i class="sw sw-end"></i>סוף מפגש</span></div>
-      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="בדיקת מנוע לאורך המפגשים" direction="ltr">
-        ${[0, 1, 2].map((l) => `<line class="grid${l === 1 ? ' grid-mid' : ''}" x1="${P.l}" x2="${W - P.r}" y1="${y(l)}" y2="${y(l)}"/><text class="tick tick-eng" x="${P.l - 8}" y="${y(l) + 4}" text-anchor="end">${['צב', 'דג', 'קוף'][l]}</text>`).join('')}
-        ${rows.map((s, i) => {
-          const a = lv(s, 'engineStart'), b = lv(s, 'engineEnd');
-          const cx = x(i), off = 5;
-          return `<g class="pt">
-            ${a !== null && b !== null && a !== b ? `<line class="eng-link" x1="${cx - off}" y1="${y(a)}" x2="${cx + off}" y2="${y(b)}"/>` : ''}
-            ${a !== null ? `<circle class="eng-start" cx="${cx - off}" cy="${y(a)}" r="6"/>` : ''}
-            ${b !== null ? `<circle class="eng-end" cx="${cx + off}" cy="${y(b)}" r="6"/>` : ''}
-            <rect class="hit" x="${cx - 16}" y="${P.t - 6}" width="32" height="${H - P.t - P.b + 12}"/>
-            <title>${fmtDateLong(s.date)}: התחלה ${a !== null ? ENG_NAME[s.stages.engineStart.choice] : '—'}, סוף ${b !== null ? ENG_NAME[s.stages.engineEnd.choice] : '—'}</title>
-            ${(n <= 10 || i % Math.ceil(n / 10) === 0 || i === n - 1) ? `<text class="tick" x="${cx}" y="${H - 8}" text-anchor="middle">${fmtDate(s.date)}</text>` : ''}
-          </g>`;
-        }).join('')}
-      </svg></figure>`;
+  const SCORE_TASKS = ['echo', 'loudness', 'magic', 'snake'];
+  function scoreTrendCharts(sessions) {
+    return `<div class="chart-grid score-trend-grid">${SCORE_TASKS.map((key) => lineChart({
+      title: T.tasks.get(key).name,
+      unit: 'ציון 0–100',
+      sessions,
+      task: key,
+      value: (session) => {
+        const stage = st(session, key);
+        return stage && Number.isFinite(stage.score) ? stage.score : null;
+      },
+      yMax: 100,
+      width: 360,
+      height: 190,
+      showPointValues: true,
+    })).join('')}</div>`;
+  }
+
+  function taskResult(s, k) {
+    const v = st(s, k);
+    if (!s.stages[k]) return '—';
+    if (s.stages[k].skipped) return 'דולג';
+    if (k.startsWith('engine')) return FEELING_NAMES[v && v.feeling] || '—';
+    const lowConfidence = Number.isFinite(v.confidence) && v.confidence < 0.6;
+    const metrics = taskRawMetrics(k, v).filter(([, value]) => value !== null && value !== undefined)
+      .map(([label, value]) => `${label}: ${formatMetric(value)}`);
+    const scoreBadge = Number.isFinite(v.score) || !(T.ot && T.ot.isOtTask(k))
+      ? `<span class="score s${Math.min(4, Math.floor((v.score ?? 0) / 25))}">${v.score ?? '—'}</span>`
+      : '<span class="score-raw">מדדים גולמיים</span>';
+    return `${scoreBadge}${v.level ? `<small class="score-level"> · שלב ${v.level}</small>` : ''}${lowConfidence ? '<small class="score-level"> · זיהוי חלקי</small>' : ''}${metrics.length ? `<small class="score-metrics">${metrics.map(esc).join('<br>')}</small>` : ''}`;
   }
 
   function scoreCell(s, k) {
     const v = st(s, k);
-    if (!s.stages[k]) return '<td class="na">—</td>';
-    if (s.stages[k].skipped) return '<td class="na">דולג</td>';
-    if (k.startsWith('engine')) return `<td>${v.choice ? ENG_NAME[v.choice] : '—'}</td>`;
-    const lowConfidence = Number.isFinite(v.confidence) && v.confidence < 0.6;
-    return `<td${lowConfidence ? ' class="low-confidence" title="זיהוי חלקי — ביטחון נמוך מ־60%"' : ''}><span class="score s${Math.min(4, Math.floor((v.score ?? 0) / 25))}">${v.score ?? '—'}</span>${v.level ? `<small class="score-level"> · שלב ${v.level}</small>` : ''}${lowConfidence ? '<small class="score-level"> · זיהוי חלקי</small>' : ''}</td>`;
+    const lowConfidence = Number.isFinite(v && v.confidence) && v.confidence < 0.6;
+    return `<td${lowConfidence ? ' class="low-confidence" title="זיהוי חלקי — ביטחון נמוך מ־60%"' : ''}>${taskResult(s, k)}</td>`;
+  }
+
+  function pdfTaskResult(session, key) {
+    const stage = session.stages && session.stages[key];
+    if (!stage) return '—';
+    if (stage.skipped) return 'דולג';
+    if (key.startsWith('engine')) return FEELING_NAMES[stage.feeling] || '—';
+    if (!Number.isFinite(stage.score) && T.ot && T.ot.isOtTask(key)) {
+      const metrics = taskRawMetrics(key, stage).filter(([, value]) => value !== null && value !== undefined);
+      return metrics.length ? `<small class="score-metrics">${metrics.map(([label, value]) => esc(`${label}: ${formatMetric(value)}`)).join('<br>')}</small>` : 'לא נמדד';
+    }
+    if (!Number.isFinite(stage.score)) return 'לא נמדד';
+    const lowConfidence = Number.isFinite(stage.confidence) && stage.confidence < 0.6;
+    return `<span class="score s${Math.min(4, Math.floor(stage.score / 25))}">${stage.score}</span>${stage.level ? `<small class="score-level">שלב ${stage.level}</small>` : ''}${lowConfidence ? '<small class="score-level">זיהוי חלקי</small>' : ''}`;
+  }
+
+  function sessionPdfDetails(sessions, tasks) {
+    return `<div class="pdf-only pdf-session-details">${sessions.slice().reverse().map((session) => {
+      const measuredTasks = tasks.filter((task) => session.stages && session.stages[task.key]);
+      const mode = session.mode === 'sim' ? ' · מפגש סימולציה' : session.sample ? ' · נתוני דוגמה' : '';
+      const rows = measuredTasks.map((task) => `<div class="pdf-session-task">
+        <dt>${esc(task.name)}${task.domain ? `<small>${esc(task.domain)}</small>` : ''}</dt>
+        <dd>${pdfTaskResult(session, task.key)}</dd>
+      </div>`).join('');
+      return `<article class="pdf-session-record">
+        <header><h3>${fmtDateLong(session.date)}</h3><p>${session.durationSec ? `${Math.round(session.durationSec / 60)} דקות` : 'משך לא תועד'} · ${esc(sessionLevels(session))}${mode}</p></header>
+        ${rows ? `<dl>${rows}</dl>` : '<p class="hint">לא תועדו מדידות במפגש זה.</p>'}
+        <p class="pdf-session-support">עזרה של הסייעת: ${realAssists(session).length}</p>
+      </article>`;
+    }).join('')}</div>`;
+  }
+
+  function renderPdf(child, el) {
+    T.levels.ensure(child);
+    const allSessions = T.store.sessionsOf(child.id);
+    const sessions = allSessions.filter((session) => session.mode !== 'sim');
+    const reportSessions = sessions.map((session, index) => ({ session, index: index + 1 }));
+    const dateRange = sessions.length
+      ? `${fmtDateLong(sessions[0].date)} עד ${fmtDateLong(sessions[sessions.length - 1].date)}`
+      : 'אין מפגשים מתועדים';
+    const taskHeaders = SCORE_TASKS.map((key) => `<th scope="col">${esc(T.tasks.get(key).name)}</th>`).join('');
+    const scoreRows = reportSessions.map(({ session, index }) => `<tr>
+      <th scope="row">${index}</th>
+      <td>${fmtDateLong(session.date)}</td>
+      ${SCORE_TASKS.map((key) => {
+        const stage = session.stages && session.stages[key];
+        return `<td>${stage && !stage.skipped && Number.isFinite(stage.score) ? stage.score : '—'}</td>`;
+      }).join('')}
+    </tr>`).join('');
+    const summary = sentences(child, sessions);
+    const goals = T.goals ? T.goals.forChild(child).map((goal) => {
+      const state = T.goals.evaluate(child, goal, allSessions);
+      const status = goal.status === 'achieved' ? 'הושגה באישור מקצועי'
+        : goal.status === 'paused' ? 'מושהית'
+          : goal.approved ? 'פעילה ומאושרת' : 'ממתינה לאישור מקצועי';
+      return `<article class="pdf-goal">
+        <h3>${esc(goal.title)}</h3>
+        <p>${esc(goal.domain)} · ${esc(status)}</p>
+        <dl>
+          <div><dt>נקודת התחלה</dt><dd>${state.baseline === null ? 'טרם נקבעה' : `${num(state.baseline, 0)}/100`}</dd></div>
+          <div><dt>ממוצע עדכני</dt><dd>${state.recentAverage === null ? 'אין מדידה תקפה' : `${num(state.recentAverage, 0)}/100`}</dd></div>
+          <div><dt>יעד</dt><dd>${goal.target}/100</dd></div>
+          <div><dt>מדידות תקפות</dt><dd>${state.validCount} מתוך ${state.rows.length}</dd></div>
+        </dl>
+        <p>${esc(state.trend)}. הצעה לעיון: ${esc(state.recommendation)}. המידע אינו מסקנה קלינית.</p>
+      </article>`;
+    }).join('') : '';
+    const carryover = (child.carryoverNotes || []).slice(-5).map((note) => {
+      const context = { home: 'בית', kindergarten: 'גן', clinic: 'קליניקה' }[note.context] || note.context;
+      return `<li><b>${esc(context)} · ${fmtDateLong(note.date)}:</b> ${esc(note.text)}</li>`;
+    }).join('');
+    const summaryCards = summary.map((item) => `<div><dt>${esc(item.domain)}</dt><dd>${esc(item.text)}</dd></div>`).join('');
+
+    el.classList.add('pdf-mode', 'pdf-report-document');
+    el.innerHTML = `<header class="pdf-document-header">
+        <div class="pdf-document-brand"><span class="ocupa-report-logo" aria-label="Ocupa"><svg class="ocupa-mark" viewBox="0 0 42 42" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="2" y="21" width="19" height="19"/><circle cx="31" cy="30.5" r="9.5"/><path d="M21 2 L31 20 L11 20 Z"/></g></svg><span class="ocupa-word" dir="ltr">ocupa</span></span><span>דוח התקדמות</span></div>
+        <h1>${esc(child.name)}</h1>
+        <p>גיל ${esc(child.age)} · ${sessions.length} מפגשים מתועדים · ${esc(dateRange)}${child.nonverbal ? ' · מסלול ללא מילים' : ''}</p>
+        <p class="pdf-document-notice">מסמך זה מסכם נתונים שנרשמו במערכת. הציונים הם מדדי ביצוע במשימות, אינם אבחוניים ואינם תחליף לשיקול דעת מקצועי.</p>
+        ${child.demo || child.sample ? '<p class="pdf-demo-banner">נתוני הדגמה סינתטיים בלבד — אינם מתארים ילד/ה אמיתי/ת.</p>' : ''}
+      </header>
+      <section class="pdf-report-section pdf-score-chart">
+        <h2>מגמות לפי תחום</h2>
+        <p>כל גרף מציג תחום אחד, באותו סולם של 0–100. נקודה חלולה מסמנת ביטחון זיהוי נמוך; פער מסמן שלא נאסף ציון במפגש. מפגשי סימולציה אינם נכללים. הציונים הם מדדי ביצוע ואינם אבחוניים.</p>
+        ${scoreTrendCharts(sessions)}
+        <p class="pdf-chart-note">אין כאן ציון כולל: כל תחום מוצג בנפרד כדי לשמור על משמעות המדידה.</p>
+      </section>
+      <section class="pdf-report-section pdf-score-table">
+        <h2>ציונים לפי מפגש</h2>
+        ${scoreRows ? `<table><thead><tr><th scope="col">מפגש</th><th scope="col">תאריך</th>${taskHeaders}</tr></thead><tbody>${scoreRows}</tbody></table>` : '<p>אין עדיין מפגשים מתועדים.</p>'}
+        <p class="pdf-report-note">מקף מציין שלא נאסף ציון במשימה באותו מפגש. המספרים בטבלה הם אותם ערכים שמוצגים בגרפים.</p>
+      </section>
+      ${summaryCards ? `<section class="pdf-report-section pdf-session-summary"><h2>סיכום המפגש האחרון</h2><dl>${summaryCards}</dl></section>` : ''}
+      ${goals ? `<section class="pdf-report-section pdf-goal-section"><h2>מטרות שנקבעו למעקב</h2>${goals}</section>` : ''}
+      ${carryover ? `<section class="pdf-report-section pdf-carryover-section"><h2>תצפיות מחוץ למפגש</h2><ul>${carryover}</ul></section>` : ''}
+      <footer class="pdf-document-footer">הופק במערכת טומבי · ${fmtDateLong(Date.now())} · הניתוח מתבצע במכשיר; הקלטות קול אינן נשמרות.</footer>`;
+    return { sessions };
   }
 
   function levelsTable(child, sessions) {
@@ -189,6 +401,7 @@ T.report = (() => {
   function render(child, el) {
     T.levels.ensure(child);
     const sessions = T.store.sessionsOf(child.id);
+    const chartSessions = sessions.filter((session) => session.mode !== 'sim');
     const sent = sentences(child, sessions);
     const last = sessions[sessions.length - 1];
     const ranges = sessions.length ? `${fmtDateLong(sessions[0].date)} עד ${fmtDateLong(last.date)}` : 'עדיין אין מפגשים';
@@ -200,32 +413,40 @@ T.report = (() => {
           <div class="report-title-line"><span class="ocupa-report-logo" aria-label="Ocupa"><svg class="ocupa-mark" viewBox="0 0 42 42" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="2" y="21" width="19" height="19"/><circle cx="31" cy="30.5" r="9.5"/><path d="M21 2 L31 20 L11 20 Z"/></g></svg><span class="ocupa-word" dir="ltr">ocupa</span></span><img src="assets/ocupa-tombi-cutout.png" alt=""><p class="eyebrow">טומבי · דוח התקדמות</p></div>
           <h1>${esc(child.name)}</h1>
           <p class="meta">גיל ${esc(child.age)} · ${sessions.length} מפגשים · ${esc(ranges)}${child.nonverbal ? ' · מסלול ללא מילים' : ''}${child.sample ? ' · <strong>נתוני דוגמה</strong>' : ''}</p>
+          <p class="report-document-context">דוח תיעוד לצוות המטפל ולמשפחה · הופק בתאריך ${fmtDateLong(Date.now())}. המידע מסכם נתוני מפגשים ותצפיות ואינו מהווה אבחון או תחליף לשיקול דעת מקצועי.</p>
+          ${child.demo || child.sample ? '<p class="pdf-demo-banner">נתוני הדגמה סינתטיים — לצורך המחשת המסמך בלבד.</p>' : ''}
           <p class="report-levels">${currentLevels}</p>
         </div>
         <div class="report-actions no-print">
           <button class="btn btn-ghost" data-act="print" type="button">הדפסה</button>
-          <button class="btn" data-act="pdf" type="button">הורדת PDF</button>
+          <button class="btn" data-act="pdf" type="button">שמירה כ-PDF</button>
           <button class="btn btn-ghost" data-act="copy" type="button">העתקת הסיכום</button>
           <button class="btn btn-ghost" data-act="mail" type="button">שליחה במייל…</button>
           <button class="btn btn-ghost" data-act="csv" type="button">ייצוא לאקסל (CSV)</button>
+          <button class="btn btn-ghost" data-act="ot-json" type="button">ייצוא מדדי ריפוי בעיסוק (JSON)</button>
         </div>
       </header>
       ${sessions.length ? '' : '<p class="empty">עוד אין מפגשים לילד הזה. אחרי המפגש הראשון יופיעו כאן הסיכום והגרפים.</p>'}
-      ${sent.length ? `<section class="summary"><h2>מה רואים במפגש האחרון</h2><dl class="sentences">${sent.map((s) => `<div><dt>${esc(s.domain)}</dt><dd>${esc(s.text)}</dd></div>`).join('')}</dl></section>` : ''}
+      ${sent.length ? `<section class="summary"><h2>סיכום המפגש האחרון</h2><dl class="sentences">${sent.map((s) => `<div><dt>${esc(s.domain)}</dt><dd>${esc(s.text)}</dd></div>`).join('')}</dl></section>` : ''}
       ${goalsSection(child)}
-      ${sessions.length ? `<section class="charts"><h2>התקדמות לאורך זמן</h2>
-        ${engineChart(sessions)}
-        <div class="chart-grid">
-          ${lineChart({ title: 'עוצמת הקול: אריה חזק פי… מעכבר', sessions, task: 'loudness', value: (s) => st(s, 'loudness')?.ratio ?? null, fmt: (v) => '×' + num(v) })}
-          ${lineChart({ title: 'לעצור ולחכות: תגובות מיותרות בסיפור', sessions, task: 'magic', value: (s) => st(s, 'magic')?.falseAlarms ?? null, yMax: 8, fmt: (v) => num(v, 0) })}
-          ${lineChart({ title: 'להחזיק צליל: משך צליל סססס ממוצע', unit: 'שניות', sessions, task: 'snake', value: (s) => st(s, 'snake')?.mean ?? null, fmt: (v) => num(v) })}
-          ${lineChart({ title: 'לתפוס את הקצב: ציון חיקוי הקצב', unit: '0–100', sessions, task: 'echo', value: (s) => st(s, 'echo')?.score ?? null, yMax: 100, fmt: (v) => num(v, 0) })}
-          ${lineChart({ title: 'קשב: תגובות למילת המטרה', unit: 'תגובות', sessions, task: 'magic', value: (s) => st(s, 'magic')?.hits ?? null, yMax: 5, fmt: (v) => num(v, 0) })}
-          ${lineChart({ title: 'עצמאות: פעמים שהסייעת עזרה', sessions, value: (s) => realAssists(s).length, fmt: (v) => num(v, 0) })}
-        </div></section>
-      <section class="table-wrap"><h2>כל המפגשים</h2>
-        <div class="scroll-x"><table class="sessions">
-          <thead><tr><th>תאריך</th><th>משך</th><th>שלבים</th>${reportTasks.map((task) => `<th>${esc(task.name)}</th>`).join('')}<th>עזרה</th><th class="no-print"></th></tr></thead>
+      ${sessions.length ? `<section class="charts score-progress-section"><h2>מגמות לפי תחום</h2>
+        <p class="score-chart-description">כל גרף מציג תחום אחד, באותו סולם של 0–100, כדי שאפשר יהיה לעקוב אחר השינוי בלי לערבב בין משימות שונות. פער מציין שלא נאסף ציון במפגש; נקודה חלולה מסמנת ביטחון זיהוי נמוך. מפגשי סימולציה אינם נכללים.</p>
+        ${scoreTrendCharts(chartSessions)}
+        <p class="score-chart-note">הציונים מתארים ביצוע במשימות ואינם אבחון. כדי להבין את ההקשר, כדאי לעיין גם בסיכום המפגש ובפירוט הנתונים.</p>
+        <details class="score-support-charts"><summary>מדדים נוספים לצוות המטפל</summary>
+          <p class="score-chart-description">מדדים אלה משתמשים ביחידות שונות בין משימה למשימה, ולכן מוצגים בנפרד ואינם מיועדים להשוואה זה מול זה.</p>
+          <div class="chart-grid">
+            ${lineChart({ title: 'הפקת קול: יחס עוצמה בין קול חזק לחלש', sessions: chartSessions, task: 'loudness', value: (s) => st(s, 'loudness')?.ratio ?? null, fmt: (v) => '×' + num(v) })}
+            ${lineChart({ title: 'עיכוב תגובה: תגובות שווא במהלך הסיפור', sessions: chartSessions, task: 'magic', value: (s) => st(s, 'magic')?.falseAlarms ?? null, yMax: 8, fmt: (v) => num(v, 0) })}
+            ${lineChart({ title: 'משך הפקת צליל', unit: 'שניות', sessions: chartSessions, task: 'snake', value: (s) => st(s, 'snake')?.mean ?? null, fmt: (v) => num(v) })}
+            ${lineChart({ title: 'חיקוי תבניות קצב: ציון ביצוע', unit: '0–100', sessions: chartSessions, task: 'echo', value: (s) => st(s, 'echo')?.score ?? null, yMax: 100, fmt: (v) => num(v, 0) })}
+            ${lineChart({ title: 'קשב שמיעתי: זיהוי מילת המטרה', unit: 'תגובות', sessions: chartSessions, task: 'magic', value: (s) => st(s, 'magic')?.hits ?? null, yMax: 5, fmt: (v) => num(v, 0) })}
+            ${lineChart({ title: 'תמיכה: מספר אירועי סיוע', sessions: chartSessions, value: (s) => realAssists(s).length, fmt: (v) => num(v, 0) })}
+          </div>
+        </details></section>
+      <section class="table-wrap"><h2>תיעוד המפגשים</h2>
+        <div class="screen-session-table"><div class="scroll-x"><table class="sessions">
+          <thead><tr><th>תאריך</th><th>משך</th><th>שלבים</th>${reportTasks.map((task) => `<th>${esc(task.name)}${task.domain ? `<small class="task-domain">${esc(task.domain)}</small>` : ''}</th>`).join('')}<th>עזרה</th><th class="no-print"></th></tr></thead>
           <tbody>${sessions.slice().reverse().map((s) => `<tr>
             <td>${fmtDateLong(s.date)}${s.mode === 'sim' ? ' <span class="tag">סימולציה</span>' : ''}${s.sample ? ' <span class="tag">דוגמה</span>' : ''}</td>
             <td>${s.durationSec ? Math.round(s.durationSec / 60) + ' דק׳' : '—'}</td>
@@ -233,7 +454,8 @@ T.report = (() => {
             ${reportTasks.map((task) => scoreCell(s, task.key)).join('')}
             <td>${realAssists(s).length}</td>
             <td class="no-print"><button class="link-btn" data-del="${s.id}" type="button">מחיקה</button></td></tr>`).join('')}</tbody>
-        </table></div>
+        </table></div></div>
+        ${sessionPdfDetails(sessions, reportTasks)}
         <p class="footnote">ציונים 0–100 לכל משימה. הקול משמש רק כדרך התגובה; מתרגלים חיקוי קצב, עוצמת קול, המתנה לפני תגובה והחזקת צליל. הניתוח נעשה בדפדפן, ושום הקלטה לא נשמרה.</p>
       </section>` : ''}${levelsTable(child, sessions)}`;
     return { sentences: sent, sessions };
@@ -254,16 +476,24 @@ T.report = (() => {
 
   function csv(child) {
     const sessions = T.store.sessionsOf(child.id);
-    const taskColumns = T.tasks.all().flatMap((task) => [`${task.name} ציון`, `${task.name} ביטחון`]);
-    const head = ['תאריך', 'משך (שניות)', 'מנוע התחלה', 'הד ציון', 'הד נכונים', 'הד סטייה מ"ש', 'אריה/עכבר פי', 'עוצמה ציון', 'תגובות למילת המטרה', 'תגובות מיותרות', 'זמן תגובה מ"ש', 'קשב ציון', 'סססס ממוצע ש', 'סססס הכי ארוך ש', 'נשימה ציון', 'מנוע סוף', 'עזרות', 'ללא מילים', 'מצב', 'אישור תוכנית מטפל/ת', 'מטרות בתוכנית', ...taskColumns];
+    const taskColumns = T.tasks.all().flatMap((task) => task.key.startsWith('engine')
+      ? [`${task.name} בחירה`]
+      : [`${task.name} ציון`, `${task.name} ביטחון`]);
+    const taskMetricColumns = T.tasks.all().flatMap((task) =>
+      taskRawMetrics(task.key).map(([label]) => `${task.name} ${label}`));
+    const head = ['תאריך', 'משך (שניות)', 'תחושה בתחילת המפגש', 'הד ציון', 'הד נכונים', 'הד סטייה מ"ש', 'אריה/עכבר פי', 'עוצמה ציון', 'תגובות למילת המטרה', 'תגובות מיותרות', 'זמן תגובה מ"ש', 'קשב ציון', 'סססס ממוצע ש', 'סססס הכי ארוך ש', 'נשימה ציון', 'תחושה בסיום', 'עזרות', 'ללא מילים', 'מצב', 'אישור תוכנית מטפל/ת', 'מטרות בתוכנית', ...taskColumns, ...taskMetricColumns];
     const rows = sessions.map((s) => {
       const e = st(s, 'echo') || {}, l = st(s, 'loudness') || {}, m = st(s, 'magic') || {}, n = st(s, 'snake') || {};
       const taskValues = T.tasks.all().flatMap((task) => {
         const result = st(s, task.key);
-        return [result && result.score, result && result.confidence];
+        return task.key.startsWith('engine')
+          ? [FEELING_NAMES[result && result.feeling] || '']
+          : [result && result.score, result && result.confidence];
       });
+      const taskMetricValues = T.tasks.all().flatMap((task) =>
+        taskRawMetrics(task.key, st(s, task.key)).map(([, value]) => value));
       const goalTitles = (s.goalSnapshot || []).map((goal) => goal.title).join(' | ');
-      return [new Date(s.date).toISOString().slice(0, 16).replace('T', ' '), s.durationSec, ENG_NAME[st(s, 'engineStart')?.choice] || '', e.score, e.correctCount, e.meanDevMs, l.ratio, l.score, m.hits, m.falseAlarms, m.meanRtMs, m.score, n.mean, n.best, n.score, ENG_NAME[st(s, 'engineEnd')?.choice] || '', realAssists(s).length, s.nonverbal ? 'כן' : 'לא', s.mode === 'sim' ? 'סימולציה' : s.sample ? 'דוגמה' : 'מיקרופון', s.clinicianApproved ? 'כן' : 'לא', goalTitles, ...taskValues];
+      return [new Date(s.date).toISOString().slice(0, 16).replace('T', ' '), s.durationSec, FEELING_NAMES[st(s, 'engineStart')?.feeling] || '', e.score, e.correctCount, e.meanDevMs, l.ratio, l.score, m.hits, m.falseAlarms, m.meanRtMs, m.score, n.mean, n.best, n.score, FEELING_NAMES[st(s, 'engineEnd')?.feeling] || '', realAssists(s).length, s.nonverbal ? 'כן' : 'לא', s.mode === 'sim' ? 'סימולציה' : s.sample ? 'דוגמה' : 'מיקרופון', s.clinicianApproved ? 'כן' : 'לא', goalTitles, ...taskValues, ...taskMetricValues];
     });
     return '﻿' + [head, ...rows].map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
   }
@@ -326,6 +556,7 @@ T.report = (() => {
           const score = profile.scores[i];
           const stages = {};
           T.tasks.all().forEach((task, index) => {
+            if (task.ot) return;
             const linked = child.goals.some((goal) => goal.taskKeys.includes(task.key));
             const taskScore = Math.max(0, Math.min(100, score + (linked ? 0 : ((index % 3) - 1) * 8)));
             const confidence = profile.key === 'ben' && i === 1 ? 0.48
@@ -334,8 +565,8 @@ T.report = (() => {
           });
           const echoScore = stages.echo.score, loudnessScore = stages.loudness.score;
           const magicScore = stages.magic.score, snakeScore = stages.snake.score;
-          stages.engineStart = { choice: i < 2 ? 'monkey' : 'fish', method: 'voice', score: 100, confidence: 0.9 };
-          stages.engineEnd = { choice: i < 1 ? 'monkey' : 'fish', method: 'voice', score: 100, confidence: 0.9 };
+          stages.engineStart = { skipped: true, reason: 'אין דיווח עצמי בנתוני דוגמה' };
+          stages.engineEnd = { skipped: true, reason: 'אין דיווח עצמי בנתוני דוגמה' };
           Object.assign(stages.echo, { trials: [1, 2, 3, 4].map((target) => ({ count: target, target })), correctCount: Math.round(echoScore / 25), meanDevMs: 280 - i * 32 });
           Object.assign(stages.loudness, { rounds: [], ratio: +(1.2 + loudnessScore / 45).toFixed(2), consistencyDb: 3 - i * 0.35 });
           Object.assign(stages.magic, { hits: Math.round(magicScore / 25), misses: 4 - Math.round(magicScore / 25), falseAlarms: Math.max(0, 5 - i), nTargets: 4, nDistractors: 8, meanRtMs: 1500 - i * 100 });
@@ -357,6 +588,11 @@ T.report = (() => {
           session.demo = true;
           session.sample = true;
           session.clinicianApproved = true;
+          // OT tasks record raw metrics only; drop invented scores left by older demo data
+          Object.keys(session.stages || {}).forEach((key) => {
+            const task = T.tasks.get(key);
+            if (task && task.ot && !session.stages[key].ot) delete session.stages[key];
+          });
           session.goalSnapshot = child.goals.map((goal) => ({ id: goal.id, title: goal.title, taskKeys: goal.taskKeys, baseline: goal.baseline, target: goal.target }));
         });
         T.store.save();
@@ -366,5 +602,5 @@ T.report = (() => {
     return { added, names };
   }
 
-  return { render, sentences, summaryText, csv, makeDemoData, makeSample: makeDemoData, ASSIST };
+  return { render, renderPdf, sentences, summaryText, csv, rawSummary, makeDemoData, makeSample: makeDemoData, ASSIST };
 })();

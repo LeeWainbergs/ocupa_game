@@ -114,32 +114,6 @@ T.session = (() => {
     return onsets;
   }
 
-  // ---------- word matching for צב / דג / קוף ----------
-  const WORDS = ['turtle', 'fish', 'monkey'];
-  function classify(seg) {
-    const audio = T.audio.grab(seg.start, seg.end);
-    const feats = T.dsp.mfcc(audio);
-    const tpl = (child && child.templates) || {};
-    const ready = WORDS.every((w) => tpl[w] && tpl[w].length);
-    if (ready && feats.length > 5) {
-      const dist = WORDS.map((w) => Math.min(...tpl[w].map((t) => T.dsp.dtw(feats, t))));
-      const order = dist.map((d, i) => [d, i]).sort((a, b) => a[0] - b[0]);
-      const margin = (order[1][0] - order[0][0]) / order[0][0];
-      return { word: WORDS[order[0][1]], confident: margin > 0.1, margin, feats };
-    }
-    // no samples yet: only the "ts" of צב is reasonably clear
-    const sib = T.dsp.onsetSibilance(audio);
-    return { word: sib > 0.4 ? 'turtle' : null, confident: false, margin: 0, feats };
-  }
-
-  // ---------- UI helpers ----------
-  const ENGINE = {
-    turtle: { label: 'צב', note: 'איטי', emoji: '🐢' },
-    fish: { label: 'דג', note: 'בדיוק טוב', emoji: '🐟' },
-    monkey: { label: 'קוף', note: 'מהיר מדי', emoji: '🐒' },
-  };
-  T.ENGINE = ENGINE;
-
   function stageHeader(stage, i) {
     stageKey = stage.key;
     T.ui.setStage(i, stage);
@@ -176,9 +150,6 @@ T.session = (() => {
     const context = {
       listen, say, wait, check, countPeaks, praise, G, child, nonverbal,
       taskBox: $task,
-      classify,
-      words: WORDS,
-      engineLabels: ENGINE,
       setManualPick(fn) { onManualPick = fn; },
     };
     Object.defineProperty(context, 'lastPraiseKey', { get: () => lastPraiseKey });
@@ -210,8 +181,14 @@ T.session = (() => {
       })) : [],
     };
     const startT = performance.now();
-    await say(`שלום ${c.name}! אני טומבי. בוא${G('', 'י')} נשחק ביחד!`, null);
-    for (let i = 0; i < plan.length; i++) {
+    try {
+      await say(`שלום ${c.name}! אני טומבי. בוא${G('', 'י')} נשחק ביחד!`, null);
+    } catch (e) {
+      // skipping during the greeting skips only the greeting; ending the session still ends it cleanly
+      if (e !== SKIP && e !== ABORT) throw e;
+      T.tombi.stopSpeaking(); T.audio.setGate(false);
+    }
+    for (let i = 0; i < plan.length && !abortFlag; i++) {
       const entry = plan[i];
       const task = T.tasks.get(entry.key);
       if (entry.skip) {
@@ -219,7 +196,7 @@ T.session = (() => {
         T.ui.stageDone(i, null);
         continue;
       }
-      if (calmRequested && !['transition', 'calm'].includes(entry.slot) && !['turtleRabbit', 'snake', 'engineEnd'].includes(entry.key)) {
+      if (calmRequested && !['transition', 'calm'].includes(entry.slot) && !['turtleRabbit', 'snake', 'calmingPotion', 'engineEnd'].includes(entry.key)) {
         rec.stages[entry.key] = { skipped: true, score: null, short: !!entry.short, reason: 'מעבר להרגעה' };
         T.ui.stageDone(i, null);
         continue;
@@ -239,7 +216,12 @@ T.session = (() => {
         params.short = !!entry.short;
         params.isNew = !!isNewTask;
         const taskStartedAt = performance.now();
-        const r = await task.run(taskContext(), params);
+        let r;
+        try {
+          r = await task.run(taskContext(), params);
+        } finally {
+          T.audio.setOnsetConfig({ floorFrozen: false });
+        }
         if (T.audio.mode === 'sim') {
           const plannedMs = task.durationSec[params.short ? 'short' : 'full'] * 1000;
           await pace(Math.max(0, plannedMs - (performance.now() - taskStartedAt)));
@@ -251,45 +233,6 @@ T.session = (() => {
         }
         rec.stages[key] = r;
         T.ui.stageDone(i, r);
-        if (key === 'engineStart' && r && r.choice && T.planner) {
-          const replace = (slot, taskKey, reason) => {
-            const index = plan.findIndex((item) => item.slot === slot);
-            const next = T.tasks.get(taskKey);
-            if (!next || index < 0 || plan[index].key === taskKey) return false;
-            const history = T.store.sessionsOf(c.id);
-            if (!T.planner.canReplace(plan, index, taskKey, c, setting, history)) {
-              const gradingIndex = plan.findIndex((item) => item.slot === 'grading' && item.optional && !item.skip);
-              const wouldExceedNewLimit = T.planner.isNewTask(taskKey, c, history)
-                && plan.filter((item, itemIndex) => itemIndex !== index && !item.skip
-                  && T.planner.isNewTask(item.key, c, history)).length > 0;
-              if (!wouldExceedNewLimit || gradingIndex < 0 || gradingIndex === index
-                || !T.planner.isNewTask(plan[gradingIndex].key, c, history)) return false;
-              plan[gradingIndex] = { ...plan[gradingIndex], skip: true, reason: 'הותאם למגבלת משימה חדשה אחת' };
-              if (!T.planner.canReplace(plan, index, taskKey, c, setting, history)) {
-                plan[gradingIndex] = { ...plan[gradingIndex], skip: false };
-                return false;
-              }
-            }
-            plan[index] = { ...plan[index], key: taskKey, name: next.name, domain: next.domain, reason };
-            if (T.goals) plan[index].goalIds = T.goals.goalsForTask(c, taskKey, true).map((goal) => goal.id);
-            rec.plan = plan.map((item) => ({ ...item }));
-            STAGES[index] = next;
-            T.ui.setPlan && T.ui.setPlan(plan);
-            return true;
-          };
-          if (r.choice === 'monkey') {
-            replace('rhythm', 'echo', 'התאמה למנוע מהיר');
-            replace('arousal', 'stompFreeze', 'הקפאה ארוכה לפי בדיקת המנוע');
-          } else if (r.choice === 'turtle') {
-            if (c.canStand === false) {
-              replace('rhythm', 'march', 'אפשרות מעוררת לפי בדיקת המנוע');
-              replace('arousal', 'jumps', 'אפשרות מעוררת לפי בדיקת המנוע');
-            } else if (c.canJump !== false) {
-              replace('rhythm', 'echo', 'ריווח לפני משימת תנועה מעוררת');
-              replace('arousal', 'jumps', 'אפשרות מעוררת לפי בדיקת המנוע');
-            }
-          }
-        }
         if (r && Number.isFinite(r.score) && (r.score < 30 || rec.assists.filter((a) => a.stage === key && ['model', 'physical'].includes(a.type)).length >= 3)) {
           const next = plan.slice(i + 1).find((entry) => !['engineStart', 'engineEnd'].includes(entry.key));
           if (next) next.short = true;
@@ -329,7 +272,7 @@ T.session = (() => {
   }
 
   return {
-    run, get STAGES() { return STAGES; }, listen, classify, G,
+    run, get STAGES() { return STAGES; }, listen, G,
     get record() { return rec; },
     get stageKey() { return stageKey; },
     get paused() { return paused; },
@@ -338,7 +281,7 @@ T.session = (() => {
     jumpToCalm() { calmRequested = true; skipFlag = true; T.tombi.stopSpeaking(); },
     abort() { abortFlag = true; T.tombi.stopSpeaking(); },
     manual() { liveWindow && liveWindow.manual(); },
-    pickEngine(w) { onManualPick && onManualPick(w); },
+    pickSelection(value) { onManualPick && onManualPick(value); },
     repeat() { if (lastPrompt) { rec && rec.assists.push({ stage: stageKey, type: 'repeat', t: Date.now() }); T.tombi.say(lastPrompt.text, lastPrompt.key); } },
     assist(type) { if (rec) rec.assists.push({ stage: stageKey, type, t: Date.now() }); },
     setChildForTeaching(c) { child = c; },

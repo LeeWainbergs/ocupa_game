@@ -4,13 +4,20 @@ T.tasks.register({
   slot: 'arousal', arousal: 2, gross: true, jump: false,
   needs: { space: 1.5, hardFloor: true, standing: true, object: null, quietRoom: false },
   modes: ['verbal', 'nonverbal'], minAge: 3, durationSec: { short: 50, full: 90 }, levels: 5,
-  params(level = 1, age = 5, child = {}) { return { level, age, seated: child.canStand === false, freezes: level === 1 ? 2 : 3, freezeMs: level === 1 ? 2000 : level === 5 ? 5000 : 3000 }; },
+  params(level = 1, age = 5, child = {}) {
+    return {
+      level, age, seated: child.canStand === false,
+      freezes: level === 1 ? 2 : 3,
+      freezeMs: level === 1 ? 2000 : level === 5 ? 5000 : 3000,
+      trials: { short: 2, full: 5 },
+    };
+  },
   run(ctx, p) {
     return (async () => {
       await T.activity.start(ctx, { title: 'רוקעים ונעצרים', picture: 'stop', intro: 'statue_intro', instruction: 'statue_go' });
       const practice = p.isNew ? await T.activity.practice(ctx, () => T.audio.sim.stomp(250, 0.45), { minIoiMs: 220, minAboveFloor: 12 }) : null;
       const trials = [];
-      const freezeCount = p.short ? 1 : p.freezes;
+      const freezeCount = p.trials[p.short ? 'short' : 'full'];
       for (let i = 0; i < freezeCount; i++) {
         const beats = p.level === 1 ? 8 : 5 + Math.floor(Math.random() * 8);
         for (let beat = 0; beat < beats; beat++) T.activity.beat(250 + beat * 300);

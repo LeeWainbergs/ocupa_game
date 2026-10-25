@@ -111,7 +111,16 @@ T.levels = (() => {
     };
     if (task === 'stompFreeze') return { level: lv, freezes: lv === 1 ? 2 : 3, freezeMs: lv === 1 ? 2000 : lv === 5 ? 5000 : lv === 2 ? 3000 : 4000, seated: child && child.canStand === false };
     if (task === 'jumps') return { level: lv, target: lv === 1 ? 3 : 5, intervalMs: lv >= 3 ? 800 : null };
-    if (task === 'reverseDrum') return { level: lv, items: lv === 1 ? 8 : 16, sequence: [2, 1, 2, 2, 1, 1, 1, 2, 1, 2, 2, 1, 1, 2] };
+    if (task === 'reverseDrum') {
+      const irregularIntervals = [2700, 3100, 2500, 3300, 2800, 3200, 2600, 3000, 3400, 2500, 3100, 2700, 3300, 2800, 3200, 2600];
+      return {
+        level: lv, items: 16, sequence: [2, 1, 2, 2, 1, 1, 1, 2, 1, 2, 2, 1, 1, 2, 2, 1],
+        invert: lv >= 2, visualCue: lv === 2, irregular: lv === 5,
+        intervalMs: lv === 4 ? 2400 : 3000,
+        trialIntervals: lv === 5 ? irregularIntervals : null,
+        responseWindowMs: lv >= 4 ? 2000 : 2500,
+      };
+    }
     if (task === 'turtleRabbit') return { level: lv, phaseMs: lv > 2 ? 6000 : 4500, seated: child && child.canStand === false };
     if (task === 'clapStomp') return { level: lv, sequence: lv < 3 ? ['clap', 'stomp', 'clap', 'stomp', 'clap', 'stomp'] : ['pot', 'table', 'pot', 'table', 'pot', 'table'] };
     if (task === 'ball') return { level: lv, target: lv < 3 ? 4 : 6 };

@@ -16,6 +16,7 @@
   <ol id="results"></ol>
   <pre id="details"></pre>
   <script src="../js/dsp.js"></script>
+  <script src="../js/audio.js"></script>
   <script src="../js/storage.js"></script>
   <script src="../js/lines.js"></script>
   <script src="../js/levels.js"></script>
@@ -36,12 +37,29 @@
   <script src="../js/tasks/ball.js"></script>
   <script src="../js/tasks/elephant-mouse.js"></script>
   <script src="../js/tasks/march.js"></script>
+  <script src="../js/tasks/ot-engine.js"></script>
+  <script src="../js/tasks/crystal-tower.js"></script>
+  <script src="../js/tasks/calming-potion.js"></script>
+  <script src="../js/tasks/emotion-guess.js"></script>
   <script src="../js/planner.js"></script>
+  <script src="../js/pdf.js?v=20261025-native-print"></script>
+  <script src="../js/report.js?v=20261025-data-pdf-2"></script>
   <script>
     const tests = [];
+    const asyncTests = [];
     const test = (name, run) => {
       try { const detail = run(); tests.push({ name, pass: detail !== false, detail }); }
       catch (error) { tests.push({ name, pass: false, detail: error.message }); }
+    };
+    const testAsync = (name, run) => {
+      asyncTests.push((async () => {
+        try {
+          const detail = await run();
+          tests.push({ name, pass: detail !== false, detail });
+        } catch (error) {
+          tests.push({ name, pass: false, detail: error.message });
+        }
+      })());
     };
     const samples = new Float32Array(512);
     for (let i = 0; i < samples.length; i++) samples[i] = Math.sin(2 * Math.PI * 100 * i / 16000);
@@ -81,6 +99,19 @@
       const frames = Array.from({ length: 50 }, (_, i) => ({ t: i * 10, db: -30, odf: 0 }));
       frames[12].odf = 10; frames[22].odf = 9;
       return T.dsp.peakPick(frames, { floorDb: -60, minAboveFloor: 10, minIoiMs: 130 }).length === 1;
+    });
+    testAsync('איסוף אירועים שומר הקפאת רצפה פעילה', async () => {
+      const wasFrozen = T.audio.floorFrozen;
+      const originalUi = T.ui;
+      T.audio.setOnsetConfig({ floorFrozen: true });
+      T.ui = { onsetRepeat() {} };
+      try {
+        await T.activity.collect({ wait: async () => {} }, { durationMs: 0, drainMs: 0 });
+        return T.audio.floorFrozen;
+      } finally {
+        T.audio.setOnsetConfig({ floorFrozen: wasFrozen });
+        T.ui = originalUi;
+      }
     });
     test('שיא מתחת לסף רעש אינו נבחר', () => {
       const frames = Array.from({ length: 40 }, (_, i) => ({ t: i * 10, db: -55, odf: i === 20 ? 20 : 0 }));
@@ -200,6 +231,15 @@
           && T.tasks.all().every((task) => Math.max(task.durationSec.full, task.durationSec.short) <= 120);
       });
     });
+    test('בדיקות התחושה הן דיווח עצמי, עם נשימות דרקון שהילד בוחר', () => {
+      const start = T.tasks.get('engineStart'), end = T.tasks.get('engineEnd');
+      const simulated = start.simulate({ feeling: 'worried', breaths: 3 });
+      return Object.keys(T.FEELINGS).join(',') === 'happy,calm,tired,sad,worried,angry,unsure,preferNot'
+        && start.durationSec.full === 30
+        && simulated.feeling === 'worried' && simulated.breaths === 3
+        && end.simulate({ feeling: 'calm' }).feeling === 'calm'
+        && !['turtle', 'fish', 'monkey'].some((key) => key in T.FEELINGS);
+    });
     test('גן מסנן כדור ומנהרת לחישה, אך מאפשר שלב קול בסיסי', () => {
       const child = { id: 'planner-kindergarten-child', age: 5, levels: { loudness: 3 } };
       const setting = { room: 'kindergarten', quietRoom: false, budgetMin: 9 };
@@ -258,6 +298,64 @@
         && snake4.mode === 'stop-cue' && march4.tempoShiftMs >= 50
         && march5.antiPhase && !marchYoung5.antiPhase;
     });
+    test('סולם התוף ההפוך מודד חיקוי, היפוך, רמזים וקצב לפי הרמה', () => {
+      const levels = [1, 2, 3, 4, 5].map((level) => T.tasks.get('reverseDrum').params(level, 5, { age: 5 }));
+      return levels[0].items === 16 && !levels[0].invert
+        && levels[1].invert && levels[1].visualCue && levels[1].responseWindowMs === 2500
+        && levels[2].invert && !levels[2].visualCue
+        && levels[3].intervalMs === 2400 && levels[3].responseWindowMs === 2000
+        && levels[4].irregular && levels[4].trialIntervals.some((ms, index, all) => index > 0 && ms !== all[index - 1]);
+    });
+    test('ניקוד התוף ההפוך מתעלם משני פריטי החיקוי וסופר 14 פריטי היפוך', () => {
+      const task = T.tasks.get('reverseDrum');
+      const params = task.params(2, 6, { age: 6 });
+      const trials = task.trials(params, 16);
+      const events = trials.flatMap((trial) => Array.from({ length: trial.targetCount }, (_, index) => ({
+        t: 1000 + trial.responseStartMs + 200 + index * 260,
+      })));
+      const results = task.scoreEvents(events, trials, 1000);
+      const scored = results.filter((item) => item.scored);
+      const imitationEvents = trials.filter((trial) => trial.scored).flatMap((trial) =>
+        Array.from({ length: trial.modelCount }, (_, index) => ({
+          t: 1000 + trial.responseStartMs + 200 + index * 260,
+        })));
+      const imitationResults = task.scoreEvents(imitationEvents, trials, 1000).filter((item) => item.scored);
+      const noResponseResults = task.scoreEvents([], trials, 1000).filter((item) => item.scored);
+      const noOverlap = [4, 5].every((level) => {
+        const advanced = task.trials(task.params(level, 6, { age: 6 }), 16);
+        return advanced.every((trial, index) => index === advanced.length - 1
+          || trial.responseEndMs <= advanced[index + 1].startMs);
+      });
+      const originalClap = T.audio.sim.clap;
+      const simulated = [];
+      const simulationParams = [params, ...[4, 5].map((level) => ({
+        ...task.params(level, 6, { age: 6 }), items: 16,
+      }))];
+      T.audio.sim.clap = (delay) => simulated.push(delay);
+      try { simulationParams.forEach((simulation) => task.simulate(simulation)); }
+      finally { T.audio.sim.clap = originalClap; }
+      const expectedSimulation = simulationParams.flatMap((simulation) =>
+        task.trials(simulation, simulation.items).flatMap((trial) =>
+          Array.from({ length: trial.targetCount }, (_, index) =>
+            trial.startMs + (trial.modelCount - 1) * 160 + 350 + index * 260)));
+      return results.slice(0, 2).every((item) => !item.scored && item.correct)
+        && scored.length === 14 && scored.every((item) => item.correct)
+        && imitationResults.every((item) => item.count === item.target && !item.correct)
+        && noResponseResults.every((item) => item.count === 0 && !item.correct)
+        && noOverlap && JSON.stringify(simulated) === JSON.stringify(expectedSimulation);
+    });
+    test('סבבי המשימות המוטוריות מתארכים בגרסה מלאה ומתקצרים בקצרה', () => {
+      const rounds = (key) => T.tasks.get(key).params(3, 5, { age: 5 }).rounds;
+      const freeze = T.tasks.get('stompFreeze').params(3, 5, { age: 5 }).trials;
+      const march = T.tasks.get('march').params(3, 5, { age: 5 });
+      const turtle = T.tasks.get('turtleRabbit').params(3, 5, { age: 5 });
+      return freeze.short === 2 && freeze.full === 5
+        && rounds('jumps').short === 2 && rounds('jumps').full === 4
+        && rounds('clapStomp').short === 4 && rounds('clapStomp').full === 8
+        && rounds('ball').short === 3 && rounds('ball').full === 5
+        && rounds('elephantMouse').short === 2 && rounds('elephantMouse').full === 4
+        && march.count >= 8 && turtle.phaseMs >= 14000;
+    });
     test('שלושת פרופילי הסימולציה עומדים במגבלת משימה חדשה וקפיצה', () => {
       const profiles = [
         { id: 'demo-3', age: 3, nonverbal: false, canJump: true, canStand: true },
@@ -273,6 +371,116 @@
           && (child.canJump !== false || active.every((entry) => entry.key !== 'jumps'));
       });
     });
+    test('הדוח מציג תחומי משימות וה-CSV כולל מדדים גולמיים עם עמודות תואמות', () => {
+      const originalSessionsOf = T.store.sessionsOf;
+      const stages = {
+        stompFreeze: { score: 80, confidence: 0.9, level: 2, freezeOK: 0.5, freezeEvents: 2, stopLatMs: 420, restartLatMs: [200, 400], engage: 0.75 },
+        jumps: { score: 75, confidence: 0.5, level: 2, count: 8, targetTotal: 10, countErr: 2, overshoot: 1, cvIoi: 0.2 },
+        reverseDrum: { score: 65, confidence: 0.9, level: 3, mode: 'reverse', correctCount: 9, scoredItemCount: 14, pretestCorrectCount: 2, imitationErrors: 1, otherErrors: 4 },
+        turtleRabbit: { score: 70, confidence: 0.9, level: 2, smtMs: 360, slowRatio: 1.7, slowCv: 0.2, hold: 0.8 },
+        clapStomp: { score: 75, confidence: 0.9, level: 2, sequenceAccuracy: 0.8, alternating: 0.7, cvIoi: 0.25, confidentOnsets: 16 },
+        ball: { score: 72, confidence: 0.9, level: 2, streak: 6, ballFell: false, cvIoi: 0.2, peakDbSd: 2.1 },
+        elephantMouse: { score: 68, confidence: 0.9, level: 2, elephantDb: -20, mouseDb: -30, contrastDb: 10, separation: 0.8, spreadDb: 3 },
+        march: { score: 77, confidence: 0.9, level: 2, tempoMatch: 1.05, cvIti: 0.15, phaseVectorLength: 0.7, meanAsynchronyMs: 20, hitPercent: 0.8, continuationSteps: 5, continuationDriftMsPerStep: 2, tempoRecoverySteps: 3 },
+        snake: { score: 77, confidence: 0.8, level: 4, mode: 'stop-cue', stopLatencyMs: 420, trialLatenciesMs: [380, 420], nValid: 2, durations: [3.1, 4.2], trialSd: 0.55, targetSec: 5, bestStabilityDb: 2.4, sibilanceRatio: 0.7, breakCount: 1, clipped: false },
+      };
+      T.store.sessionsOf = () => [{ date: Date.UTC(2026, 0, 1), durationSec: 60, stages, assists: [] }];
+      try {
+        const child = { id: 'report-test', name: 'בדיקה', age: 5, goals: [], levels: {} };
+        const el = {};
+        T.report.render(child, el);
+        const csv = T.report.csv(child).replace(/^\uFEFF/, '');
+        const [header, row] = csv.split('\n').map((line) => line.slice(1, -1).split('","'));
+        const checks = {
+          taskDomain: el.innerHTML.includes('רוקעים ונעצרים<small class="task-domain">עכבה ועצירה של תנועה</small>'),
+          rawMetrics: el.innerHTML.includes('class="score-metrics"'),
+          chartTitle: el.innerHTML.includes('מגמות לפי תחום'),
+          chartGrid: el.innerHTML.includes('class="chart-grid score-trend-grid"'),
+          taskCharts: (el.innerHTML.split('<details class="score-support-charts">')[0].match(/class="chart" data-task=/g) || []).length === 4,
+          partialDetection: el.innerHTML.includes('זיהוי חלקי'),
+          csvWidths: header.length === row.length,
+          reverseDrumMetric: header.includes('התוף ההפוך נכונים מתוך מנוקדים')
+            && row[header.indexOf('התוף ההפוך נכונים מתוך מנוקדים')] === '9/14',
+          marchMetric: header.includes('מצעד הדרקון מקדם שונות ITI'),
+          snakeLatency: header.includes('נחש שקט חביון עצירה מ״ש')
+            && row[header.indexOf('נחש שקט חביון עצירה מ״ש')] === '420',
+          jumpTarget: row[header.indexOf('קפיצות הדרקון יעד נחיתות')] === '10',
+          freezeMetric: row[header.indexOf('רוקעים ונעצרים עצירות תקינות %')] === '50',
+        };
+        const failed = Object.keys(checks).filter((key) => !checks[key]);
+        if (failed.length) throw new Error(`נכשלו ${failed.join(', ')}`);
+        return true;
+      } finally { T.store.sessionsOf = originalSessionsOf; }
+    });
+    test('דוח PDF מציג מגמות נפרדות, פערי מדידה וביטחון זיהוי', () => {
+      const originalSessionsOf = T.store.sessionsOf;
+      const sessions = [
+        { date: Date.UTC(2026, 0, 1), stages: { echo: { score: 60, confidence: 0.5 }, magic: { score: 20, skipped: true }, snake: { score: 80 } } },
+        { date: Date.UTC(2026, 0, 2), stages: {} },
+        { date: Date.UTC(2026, 0, 2), mode: 'sim', stages: { echo: { score: 100 }, loudness: { score: 100 } } },
+        { date: Date.UTC(2026, 0, 3), stages: { echo: { score: 90 }, loudness: { score: 70 } } },
+        { date: Date.UTC(2026, 0, 4), stages: { echo: { skipped: true } } },
+      ];
+      T.store.sessionsOf = () => sessions;
+      try {
+        const child = { id: 'pdf-report-test', name: 'בדיקת PDF', age: 5, goals: [], levels: {} };
+        const el = document.createElement('main');
+        const result = T.report.renderPdf(child, el);
+        const rows = el.querySelectorAll('.pdf-score-table tbody tr');
+        const echoChart = el.querySelector('.pdf-score-chart [data-task="echo"]');
+        const echoPoints = echoChart.querySelectorAll('.dot');
+        return result.sessions.length === 4
+          && rows.length === 4
+          && rows[0].textContent.includes('60')
+          && rows[0].textContent.includes('80')
+          && rows[1].textContent.includes('—')
+          && rows[2].textContent.includes('70')
+          && rows[3].textContent.includes('—')
+          && echoPoints.length === 2
+          && (echoChart.querySelector('.line').getAttribute('d').match(/M/g) || []).length === 2
+          && echoChart.querySelector('.dot.low-confidence')
+          && el.querySelectorAll('.pdf-score-chart [data-task]').length === 4
+          && !el.querySelector('.average-score')
+          && el.querySelector('svg')
+          && el.textContent.includes('מגמות לפי תחום')
+          && el.textContent.includes('פער מסמן שלא נאסף ציון')
+          && !el.textContent.includes('ציון ממוצע במפגש')
+          && el.textContent.includes('ציונים לפי מפגש')
+          && el.textContent.includes('הציונים הם מדדי ביצוע');
+      } finally { T.store.sessionsOf = originalSessionsOf; }
+    });
+    test('הדפסה מחזירה את המסמך למקומו ומשחזרת את מצב הממשק', () => {
+      const originalPrint = window.print;
+      const originalTitle = document.title;
+      const element = document.createElement('main');
+      const marker = document.createElement('span');
+      const button = document.createElement('button');
+      button.innerHTML = 'שמירה כ-PDF';
+      document.body.append(element, marker);
+      let printStateValid = false;
+      window.print = () => {
+        printStateValid = document.body.classList.contains('pdf-print-active')
+          && element.parentElement.classList.contains('pdf-print-host')
+          && element.classList.contains('pdf-mode')
+          && document.title === 'בדיקת הדפסה'
+          && button.disabled;
+      };
+      try {
+        T.pdf.download(element, 'בדיקת הדפסה.pdf', button);
+        return printStateValid
+          && element.parentElement === document.body
+          && element.nextSibling === marker
+          && !document.body.classList.contains('pdf-print-active')
+          && !element.classList.contains('pdf-mode')
+          && document.title === originalTitle
+          && !button.disabled
+          && button.innerHTML === 'שמירה כ-PDF';
+      } finally {
+        window.print = originalPrint;
+        element.remove();
+        marker.remove();
+      }
+    });
     test('תצפית תפקודית נשמרת עם הקשר מחוץ למדדי המיקרופון', () => {
       const originalSave = T.store.save;
       const child = { id: 'carryover-child' };
@@ -282,11 +490,161 @@
         return note.context === 'kindergarten' && child.carryoverNotes.length === 1 && note.text.includes('המתין');
       } finally { T.store.save = originalSave; }
     });
-    const failed = tests.filter((result) => !result.pass);
-    document.getElementById('summary').textContent = `${tests.length - failed.length}/${tests.length} בדיקות עברו`;
-    document.getElementById('results').innerHTML = tests.map((result) => `<li class="${result.pass ? 'pass' : 'fail'}">${result.pass ? 'עבר' : 'נכשל'}: ${result.name}</li>`).join('');
-    document.getElementById('details').textContent = JSON.stringify(tests, null, 2);
-    if (failed.length) throw new Error(`${failed.length} signal test(s) failed`);
+    function otMockCtx(script, child = { id: 'ot-test', age: 5, gender: 'f' }) {
+      let pick = null;
+      const said = [];
+      const ctx = {
+        child, nonverbal: false, G: (m, f) => (child.gender === 'f' ? f : m),
+        said, taskBox: () => document.createElement('div'),
+        say: async (text) => { said.push(text); otClock.ms += 1000; },
+        wait: async () => {}, setManualPick(fn) { pick = fn; },
+        listen: async ({ onLive, signal }) => {
+          const step = script.shift() || {};
+          const t0 = otClock.ms;
+          const segments = [], adult = [];
+          let lastEnd = null;
+          for (const item of step.segments || []) {
+            const segment = { start: t0 + item.at, end: t0 + item.at + item.dur, dur: item.dur, hz: item.hz ?? 300, adult: !!item.adult, floorDb: -60, levelDb: -30 };
+            lastEnd = Math.max(lastEnd || 0, segment.end);
+            if (segment.adult) { adult.push(segment); continue; }
+            segments.push(segment);
+            onLive && onLive('onset', { t: segment.start });
+            onLive && onLive('segment', segment);
+            if (signal && signal.cancelled) break;
+          }
+          otClock.ms = lastEnd !== null ? lastEnd + 300 : t0 + (step.windowMs || 5000);
+          if (step.aide && pick) pick(step.aide);
+          return { t0, t1: otClock.ms, segments, adult };
+        },
+      };
+      return ctx;
+    }
+    const otClock = { ms: 0 };
+    let otQueue = Promise.all(asyncTests.slice()).catch(() => {});
+    function testOt(name, run, frames = []) {
+      testAsync(name, () => {
+        const next = otQueue.then(async () => {
+          const saved = { tombi: T.tombi, ui: T.ui, framesBetween: T.audio.framesBetween, now: T.audio.now };
+          T.tombi = { chime() {}, happy() {}, stopSpeaking() {} };
+          T.ui = { aideFeelings() {}, flash() {} };
+          T.audio.framesBetween = () => frames;
+          otClock.ms = 10000;
+          T.audio.now = () => otClock.ms;
+          try { return await run(); } finally {
+            T.tombi = saved.tombi; T.ui = saved.ui; T.audio.framesBetween = saved.framesBetween; T.audio.now = saved.now;
+          }
+        });
+        otQueue = next.catch(() => {});
+        return next;
+      });
+    }
+    const near = (value, expected, tolerance = 0.05) => Number.isFinite(value) && Math.abs(value - expected) <= tolerance;
+    test('מדדי OT: מרווחים, השהיה וסטטיסטיקה גולמית', () => {
+      const M = T.ot.metrics;
+      const s = M.stats([1, 2, 3, 4]);
+      return JSON.stringify(M.intervals([1000, 4000, 6500])) === '[3000,2500]'
+        && M.latencyMs(1000, 1450) === 450 && M.latencyMs(1000, 900) === 0 && M.latencyMs(1000, null) === null
+        && s.n === 4 && s.mean === 2.5 && s.median === 2.5 && near(s.sd, 1.118, 0.001)
+        && M.stats([]).mean === null;
+    });
+    test('מדד יציבות שקוף: חלק הפריימים סביב החציון בעוצמה ובגובה צליל', () => {
+      const M = T.ot.metrics;
+      const steady = M.stability(Array.from({ length: 50 }, () => ({ db: -30, hz: 300 })));
+      const wobbly = M.stability(Array.from({ length: 50 }, (_, i) => (i < 30 ? { db: -30, hz: 300 } : { db: -40, hz: 400 })));
+      const breath = M.stability(Array.from({ length: 50 }, () => ({ db: -35, hz: 0 })));
+      return steady.audio_stability_score === 1 && steady.pitch_stability_score === 1 && steady.amplitude_sd_db === 0
+        && wobbly.audio_stability_score === 0.6 && wobbly.pitch_stability_score === 0.6 && wobbly.median_pitch_hz === 300
+        && breath.voiced_fraction === 0 && breath.pitch_stability_score === null && breath.audio_stability_score === 1;
+    });
+    test('שלוש משימות ה־OT רשומות כמשימות ללא ציון אלגוריתמי', () => ['crystalTower', 'calmingPotion', 'emotionGuess'].every((key) => {
+      const task = T.tasks.get(key);
+      return task && task.slot === 'ot' && task.ot && T.ot.isOtTask(key) && typeof task.run === 'function'
+        && typeof task.simulate === 'function' && task.durationSec.short < task.durationSec.full;
+    }));
+    testOt('מגדל הקריסטלים: זמני בנייה, מרווחים בין דיווחים וסינון נקישות', async () => {
+      const ctx = otMockCtx([
+        { segments: [{ at: 900, dur: 120, hz: 0 }, { at: 2000, dur: 600 }] },
+        { segments: [{ at: 3000, dur: 500 }] },
+        { segments: [{ at: 1500, dur: 90, hz: 0 }, { at: 2500, dur: 700 }] },
+      ]);
+      const result = await T.tasks.get('crystalTower').run(ctx, { short: true, floors: 5, floorWaitSec: 45 });
+      const m = result.ot.metrics;
+      return result.score === null && result.ot.schema === T.ot.SCHEMA && result.ot.interpretation === null
+        && m.floors_target === 3 && m.floors_reported === 3 && m.floors_reported_by_voice === 3
+        && near(m.latency_sec[0], 2) && near(m.latency_sec[1], 3) && near(m.latency_sec[2], 2.5)
+        && m.inter_response_time_sec.length === 2 && m.inter_response_time_sec.every((value) => value > 5)
+        && m.non_voice_sounds_total === 2 && Number.isFinite(m.total_duration_sec)
+        && result.confidence === 1 && JSON.parse(JSON.stringify(result)).ot.trials.length === 3;
+    });
+    testOt('מגדל הקריסטלים: סימון ידני של הסייעת ועצירה אחרי שתי שתיקות', async () => {
+      const ctx = otMockCtx([{ aide: 'done' }, {}, {}]);
+      const result = await T.tasks.get('crystalTower').run(ctx, { short: true });
+      const m = result.ot.metrics;
+      return m.floors_reported === 1 && m.floors_reported_by_aide === 1 && m.reminders_total === 1
+        && result.ot.trials[1].reported === false && result.confidence === 0
+        && ctx.said.some((line) => line.includes('אני מחכה ומקשיב'));
+    });
+    testOt('שיקוי הרוגע: משך נשיפה רציפה, הפסקות ויציבות עוצמה', async () => {
+      const ctx = otMockCtx([
+        { segments: [{ at: 500, dur: 4000, hz: 0 }] },
+        { segments: [{ at: 700, dur: 1500, hz: 0 }, { at: 2600, dur: 2500, hz: 0 }] },
+      ]);
+      const result = await T.tasks.get('calmingPotion').run(ctx, { short: true, trials: 3, maxExhaleSec: 15 });
+      const m = result.ot.metrics;
+      return result.score === null && m.trials_with_sound === 2 && m.duration_sec === 4
+        && JSON.stringify(m.exhale_duration_sec) === '[4,2.5]' && m.break_count_total === 1
+        && m.audio_stability_score === 1 && m.pitch_stability_score === null && near(m.latency_sec[0], 0.5)
+        && T.audio.cfg.gapMs === 180;
+    }, Array.from({ length: 100 }, () => ({ db: -32, hz: 0 })));
+    testOt('מנחש הרגשות: השהיית תגובה, משך דיבור וקול מבוגר בנפרד', async () => {
+      const ctx = otMockCtx([
+        { segments: [{ at: 1200, dur: 800 }, { at: 2300, dur: 400 }, { at: 400, dur: 900, hz: 150, adult: true }], aide: 'sad' },
+        { segments: [{ at: 1500, dur: 1500 }] },
+        { segments: [] },
+        { segments: [] },
+      ]);
+      const result = await T.tasks.get('emotionGuess').run(ctx, { short: true, stories: 3 });
+      const [first, second] = result.ot.trials;
+      const m = result.ot.metrics;
+      return first.story_tone === 'sad' && near(first.latency_sec, 1.2) && first.utterance_count === 2
+        && near(first.vocal_engagement_sec, 1.2) && near(first.followup_vocal_engagement_sec, 1.5)
+        && near(first.adult_voice_sec, 0.9) && first.aide_coded_emotion === 'sad' && first.aide_coded_matches_story_tone === true
+        && second.response_detected === false && second.latency_sec === null && second.aide_coded_matches_story_tone === null
+        && m.stories_presented === 2 && m.stories_with_response === 1 && near(m.vocal_engagement_sec, 2.7)
+        && m.aide_coded_count === 1 && m.aide_coded_match_count === 1;
+    });
+    testOt('זמן תגובה: קול שכבר נשמע בפתיחת חלון ההקשבה נרשם כ־null ונספר בנפרד', async () => {
+      const ctx = otMockCtx([
+        { segments: [{ at: -10, dur: 900 }] },
+        { segments: [] },
+        { segments: [{ at: 1200, dur: 800 }] },
+        { segments: [] },
+      ]);
+      const result = await T.tasks.get('emotionGuess').run(ctx, { short: true, stories: 2 });
+      const [first, second] = result.ot.trials;
+      const windows = result.ot.events.filter((event) => event.type === 'response_window');
+      return first.response_detected === true && first.latency_sec === null && near(second.latency_sec, 1.2)
+        && windows[0].sound_at_window_open === true && windows[2].sound_at_window_open === false
+        && result.ot.metrics.responses_sounding_at_window_open === 1 && result.ot.metrics.stories_with_response === 2;
+    });
+    test('ייצוא JSON ללוח המטפלת כולל רק רשומות OT גולמיות', () => {
+      const ot = { schema: T.ot.SCHEMA, task_key: 'crystalTower', metrics: { total_duration_sec: 40 } };
+      const sessions = [
+        { id: 's2', date: Date.UTC(2026, 9, 2), mode: 'mic', stages: { crystalTower: { score: null, ot }, echo: { score: 70 } } },
+        { id: 's1', date: Date.UTC(2026, 9, 1), mode: 'mic', stages: { crystalTower: { skipped: true } } },
+      ];
+      const data = JSON.parse(JSON.stringify(T.ot.exportChild({ id: 'c', name: 'נועה', age: 5 }, sessions)));
+      return data.schema === T.ot.EXPORT_SCHEMA && Object.keys(data.tasks).join() === 'crystalTower'
+        && data.tasks.crystalTower.length === 1 && data.tasks.crystalTower[0].session_id === 's2'
+        && data.tasks.crystalTower[0].metrics.total_duration_sec === 40;
+    });
+    Promise.all(asyncTests).then(() => {
+      const failed = tests.filter((result) => !result.pass);
+      document.getElementById('summary').textContent = `${tests.length - failed.length}/${tests.length} בדיקות עברו`;
+      document.getElementById('results').innerHTML = tests.map((result) => `<li class="${result.pass ? 'pass' : 'fail'}">${result.pass ? 'עבר' : 'נכשל'}: ${result.name}</li>`).join('');
+      document.getElementById('details').textContent = JSON.stringify(tests, null, 2);
+      if (failed.length) throw new Error(`${failed.length} signal test(s) failed`);
+    });
   </script>
 </body>
 </html>

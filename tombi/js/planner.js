@@ -156,14 +156,14 @@ T.planner = (() => {
     const byKey = Object.fromEntries(chosen.map((item) => [item.task.key, item]));
     let plan = [
       { task: T.tasks.get('wakeUp'), reason: 'כיול פתיחת מפגש', slot: 'calibration' },
-      { task: T.tasks.get('engineStart'), reason: 'בדיקת מנוע', slot: 'core' },
+      { task: T.tasks.get('engineStart'), reason: 'שאלה על התחושה ונשימת דרקון לבחירה', slot: 'core' },
       byKey.march || byKey.echo || byKey.clapStomp,
       byKey.stompFreeze || byKey.jumps,
       byKey.magic || byKey.reverseDrum,
       byKey.loudness || byKey.elephantMouse || byKey.ball,
       { task: T.tasks.get('turtleRabbit'), reason: 'מעבר להרגעה', slot: 'transition', short: true },
       { task: T.tasks.get('snake'), reason: 'הרגעה', slot: 'calm' },
-      { task: T.tasks.get('engineEnd'), reason: 'בדיקת מנוע חוזרת', slot: 'core' },
+      { task: T.tasks.get('engineEnd'), reason: 'שאלה על התחושה בסיום', slot: 'core' },
     ].filter(Boolean).map((item) => {
       const goals = T.goals ? T.goals.goalsForTask(child, item.task.key, true) : [];
       return {

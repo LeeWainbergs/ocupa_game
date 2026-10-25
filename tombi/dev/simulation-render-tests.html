@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Tombi simulation render regression tests</title>
+  <style>
+    body { background: #14251f; color: white; font: 16px system-ui; }
+    canvas { display: block; width: 1024px; height: 567px; }
+    pre { white-space: pre-wrap; }
+  </style>
+  <script>
+    window.T = {};
+    // Pixel comparisons use a fixed backing resolution, independent of browser zoom.
+    Object.defineProperty(window, 'devicePixelRatio', { get: () => 1 });
+    let seed = 123456789;
+    Math.random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+    // Advance the actual animation loop deterministically, only on this test page.
+    window.requestAnimationFrame = callback => { window.nextFrame = callback; return 1; };
+  </script>
+  <script src="../js/tombi.js?v=20261024-mouth-layer-fix"></script>
+</head>
+<body>
+  <h1>Simulation render regression tests</h1>
+  <p id="summary">Running...</p>
+  <pre id="results"></pre>
+  <canvas id="avatar"></canvas>
+  <script>
+    window.renderTestRun = (async () => {
+      const canvas = document.getElementById('avatar');
+      await T.tombi.mount(canvas, '../assets/tombi.jpg');
+      T.tombi.setSimulationMode(true);
+      T.tombi._blinkHold(0);
+      T.tombi.force(0);
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      const step = timestamp => {
+        nextFrame(timestamp);
+        return context.getImageData(0, 0, canvas.width, canvas.height);
+      };
+      const scale = canvas.width / 1024;
+      const compare = (a, b, box, ignoreColorShift = false) => {
+        const delta = [0, 0, 0];
+        let count = 0, sum = 0, changed = 0, minAlpha = 255;
+        const visit = callback => {
+          for (let y = Math.ceil(box[1] * scale); y < box[3] * scale; y++) {
+            for (let x = Math.ceil(box[0] * scale); x < box[2] * scale; x++) {
+              callback((y * a.width + x) * 4);
+            }
+          }
+        };
+        visit(i => { for (let c = 0; c < 3; c++) delta[c] += a.data[i + c] - b.data[i + c]; count++; });
+        if (ignoreColorShift) for (let c = 0; c < 3; c++) delta[c] /= count;
+        else delta.fill(0);
+        visit(i => {
+          let difference = 0;
+          for (let c = 0; c < 3; c++) difference += Math.abs(a.data[i + c] - b.data[i + c] - delta[c]) / 3;
+          sum += difference;
+          if (difference > 5) changed++;
+          minAlpha = Math.min(minAlpha, a.data[i + 3], b.data[i + 3]);
+        });
+        return { mean: sum / count, changedFraction: changed / count, minAlpha };
+      };
+      const source = new Image();
+      source.src = '../assets/simulation-forest-bg.png';
+      await source.decode();
+      const original = document.createElement('canvas');
+      original.width = canvas.width; original.height = canvas.height;
+      const originalContext = original.getContext('2d');
+      originalContext.drawImage(source, 0, 0, original.width, original.height);
+      const originalPixels = originalContext.getImageData(0, 0, original.width, original.height);
+      const rest = step(3600);
+      const inhale = step(4500);
+      const inhalePNG = canvas.toDataURL();
+      const exhale = step(6300);
+      const exhalePNG = canvas.toDataURL();
+      const tests = [];
+      const check = (name, detail, pass) => tests.push({ name, pass: pass(detail), detail });
+      check('Upper chest stays visible after mouth compositing',
+        compare(inhale, exhale, [478, 328, 535, 345]), d => d.mean > 3 && d.changedFraction > 0.25);
+      check('Chest blend has no transparent seam',
+        compare(inhale, exhale, [458, 311, 552, 390]), d => d.minAlpha === 255);
+      check('Legs remain stationary', compare(inhale, exhale, [460, 411, 545, 443]), d => d.mean < 2);
+      check('Head remains stationary', compare(inhale, exhale, [475, 170, 585, 205]), d => d.mean < 2);
+      check('Forest remains stationary', compare(inhale, exhale, [80, 40, 160, 110]), d => d.mean < 2);
+      // Ignore the warm lighting overlay, but require the original fur texture:
+      // shrinking the entire face crop used to pull green chest pixels into this area.
+      check('Neutral chin retains original fur texture',
+        compare(rest, originalPixels, [523, 296, 558, 310], true), d => d.mean < 1);
+      let timestamp = 7200;
+      const mouthFrames = [];
+      for (const drive of [0, 0.25, 0.6, 1]) {
+        T.tombi.force(drive);
+        for (let frame = 0; frame < 5; frame++) { step(timestamp); timestamp += 3600; }
+        mouthFrames.push(step(timestamp)); timestamp += 3600;
+      }
+      for (let index = 1; index < mouthFrames.length; index++) {
+        check(`Mouth shape ${index} still moves`,
+          compare(mouthFrames[0], mouthFrames[index], [515, 274, 568, 293]), d => d.mean > 1);
+      }
+      T.tombi.force(0);
+      for (let frame = 0; frame < 5; frame++) { step(timestamp); timestamp += 3600; }
+      const eyesOpen = step(timestamp); timestamp += 3600;
+      T.tombi._blinkHold(0.5);
+      const eyesClosed = step(timestamp);
+      check('Blink still closes the eyes', compare(eyesOpen, eyesClosed, [476, 211, 505, 236]), d => d.mean > 10);
+      const result = { tests, inhalePNG, exhalePNG };
+      window.renderTestResults = result;
+      const passed = tests.filter(test => test.pass).length;
+      document.getElementById('summary').textContent = `${passed}/${tests.length} passed`;
+      document.getElementById('results').textContent = JSON.stringify(tests, null, 2);
+      if (passed !== tests.length) throw new Error('Simulation render regression failed');
+      return result;
+    })();
+    renderTestRun.catch(error => { console.error(error); document.getElementById('summary').style.color = '#ff9999'; });
+  </script>
+</body>
+</html>

@@ -4,26 +4,54 @@ T.tasks.register({
   slot: 'rhythm', arousal: 0, gross: false, jump: false,
   needs: { space: 0, hardFloor: true, standing: false, object: 'pot-table', quietRoom: false },
   modes: ['verbal', 'nonverbal'], minAge: 3, durationSec: { short: 40, full: 65 }, levels: 5,
-  params(level = 1) { return { level, sequence: level < 3 ? ['clap', 'stomp', 'clap', 'stomp', 'clap', 'stomp'] : ['pot', 'table', 'pot', 'table', 'pot', 'table'] }; },
+  params(level = 1) {
+    return {
+      level,
+      sequence: level < 3 ? ['clap', 'stomp', 'clap', 'stomp', 'clap', 'stomp'] : ['pot', 'table', 'pot', 'table', 'pot', 'table'],
+      rounds: { short: 4, full: 8 },
+    };
+  },
   run(ctx, p) {
     return (async () => {
       const sequence = p.short ? p.sequence.slice(0, 4) : p.sequence;
       const params = { ...p, sequence };
       await T.activity.start(ctx, { title: 'כף-רגל וסיר-שולחן', picture: p.level < 3 ? 'hands' : 'pot', intro: 'table_intro', instruction: 'table_go' });
       const practice = p.isNew ? await T.activity.practice(ctx, () => T.audio.sim.clap(250, 0.45), { minIoiMs: 130, minAboveFloor: 9 }) : null;
-      const events = await T.activity.collect(ctx, { durationMs: sequence.length * 700 + 700, minIoiMs: 130, minAboveFloor: 9, simulate: () => T.tasks.get('clapStomp').simulate(params) });
+      const roundCount = p.rounds[p.short ? 'short' : 'full'];
+      const rounds = [];
+      for (let index = 0; index < roundCount; index++) {
+        if (index) await ctx.say(T.activity.line('table_go', ctx), `table_round_${index + 1}_${ctx.child.gender}_${ctx.nonverbal ? 'nv' : 'v'}`);
+        const events = await T.activity.collect(ctx, {
+          durationMs: sequence.length * 700 + 700, minIoiMs: 130, minAboveFloor: 9,
+          simulate: () => T.tasks.get('clapStomp').simulate(params),
+        });
+        const classes = events.map((event) => event.cls);
+        const sequenceAccuracy = Math.max(0, 1 - levenshtein(classes, sequence) / sequence.length);
+        const confidentClasses = classes.filter((cls) => cls !== 'uncertain');
+        const alternating = confidentClasses.length > 1
+          ? confidentClasses.slice(1).filter((cls, i) => cls !== confidentClasses[i]).length / (confidentClasses.length - 1)
+          : 0;
+        const times = events.map((event) => event.t), intervals = times.slice(1).map((t, i) => t - times[i]);
+        const mean = intervals.length ? intervals.reduce((sum, value) => sum + value, 0) / intervals.length : 0;
+        const cv = intervals.length && mean
+          ? Math.sqrt(intervals.reduce((sum, value) => sum + (value - mean) ** 2, 0) / intervals.length) / mean
+          : 1;
+        const score = 100 * (0.6 * sequenceAccuracy + 0.25 * alternating + 0.15 * Math.max(0, 1 - cv / 0.4));
+        rounds.push({ events, sequenceAccuracy, alternating, cvIoi: cv, score });
+      }
+      const events = rounds.flatMap((round) => round.events);
+      const average = (key) => rounds.reduce((sum, round) => sum + round[key], 0) / rounds.length;
+      const sequenceAccuracy = average('sequenceAccuracy'), alternating = average('alternating'), cv = average('cvIoi');
+      const score = average('score');
       const classes = events.map((event) => event.cls);
-      const expected = sequence;
-      const errors = levenshtein(classes, expected);
-      const sequenceAccuracy = Math.max(0, 1 - errors / expected.length);
       const confidentClasses = classes.filter((cls) => cls !== 'uncertain');
-      const alternating = confidentClasses.length > 1 ? confidentClasses.slice(1).filter((cls, i) => cls !== confidentClasses[i]).length / (confidentClasses.length - 1) : 0;
-      const times = events.map((event) => event.t), intervals = times.slice(1).map((t, i) => t - times[i]);
-      const mean = intervals.length ? intervals.reduce((sum, value) => sum + value, 0) / intervals.length : 0;
-      const cv = intervals.length && mean ? Math.sqrt(intervals.reduce((sum, value) => sum + (value - mean) ** 2, 0) / intervals.length) / mean : 1;
-      const score = 100 * (0.6 * sequenceAccuracy + 0.25 * alternating + 0.15 * Math.max(0, 1 - cv / 0.4));
       await ctx.say(T.activity.line('table_praise3', ctx), `table_praise3_${ctx.child.gender}_${ctx.nonverbal ? 'nv' : 'v'}`);
-      return T.activity.result(events, score, { sequenceAccuracy, alternating, cvIoi: cv, sequence: classes, confidentOnsets: confidentClasses.length, note: 'המחלקות אינן מזהות איזו יד הקישה', level: p.level, practice });
+      return T.activity.result(events, score, {
+        sequenceAccuracy, alternating, cvIoi: cv, sequence: classes,
+        confidentOnsets: confidentClasses.length,
+        rounds: rounds.map(({ events: roundEvents, ...round }) => ({ ...round, onsetCount: roundEvents.length })),
+        note: 'המחלקות אינן מזהות איזו יד הקישה', level: p.level, practice,
+      });
     })();
   },
   simulate(p) {

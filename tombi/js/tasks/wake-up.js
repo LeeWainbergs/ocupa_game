@@ -17,6 +17,7 @@ T.tasks.register({
     const picture = document.getElementById('activity-picture');
     const task = ctx.taskBox();
     try {
+      T.audio.setOnsetConfig({ centroids: ctx.child.soundCentroids || {}, floorFrozen: false });
       await ctx.say('טומבי מתעורר. קודם נקשיב לשקט, ואז נראה לטומבי שלוש רקיעות ושלוש מחיאות.', 'wake_up_intro');
       const floorDb = await T.audio.calibrateTaskFloor();
       const loopback = T.audio.mode === 'mic' ? await T.audio.calibrateLoopback() : null;
@@ -30,7 +31,6 @@ T.tasks.register({
           minAboveFloor: 9,
           simulate,
         });
-        T.audio.setOnsetConfig({ floorFrozen: true });
         if (events.length >= 2) T.onsets.addCalibration(label, events, ctx.child.id);
         return events.length;
       };

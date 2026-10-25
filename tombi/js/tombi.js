@@ -7,22 +7,17 @@ T.tombi = (() => {
   const MOUTH_BOX = { x: 820, y: 800, w: 400, h: 250 };
   const SIMULATION_MOUTH_BOX = { x: 468, y: 245, w: 152, h: 120 };
   const MOUTH_SHAPES = ['closed', 'slight', 'open', 'round'];
-  const MOUTH_CROSSFADE_MS = 70;
-  const EYES = [{ x: 942, y: 795, rx: 100, ry: 80 }, { x: 1268, y: 778, rx: 78, ry: 82 }];
+  const MOUTH_CROSSFADE_MS = 90;
+  const MOUTH_CONTRAST = 1.6;
+  const MOUTH_ANCHOR_Y = 68;
+  const MOUTH_FRAME_SCALES = [1, 1.22, 1.52, 1.4];
+  const SIMULATION_MOUTH_FRAME_SCALES = [1, 1.12, 1.32, 1.5];
+  const MOUTH_MASK = { x: 200, y: 100, rx: 72, ry: 38 };
+  const EYES = [{ x: 959, y: 792, rx: 100, ry: 80 }, { x: 1233, y: 778, rx: 90, ry: 82 }];
   const SIMULATION_EYES = [{ x: 490, y: 224, rx: 26, ry: 29 }, { x: 579, y: 224, rx: 26, ry: 29 }];
-  const SIMULATION_BREATH_CENTER = { x: 514, y: 310 };
-  const SIMULATION_DRAGON_OUTLINE = [
-    [426, 76], [438, 117], [418, 113], [399, 123], [383, 143], [372, 174], [359, 207], [367, 231],
-    [370, 247], [359, 268], [342, 276], [326, 291], [314, 307], [318, 326], [335, 338], [351, 341],
-    [361, 359], [373, 376], [381, 396], [375, 415], [366, 433], [370, 450], [386, 463], [405, 464],
-    [423, 449], [445, 452], [468, 458], [492, 459], [516, 449], [539, 447], [559, 461], [580, 472],
-    [604, 469], [623, 456], [632, 437], [637, 405], [653, 396], [669, 410], [686, 411], [700, 400],
-    [704, 384], [697, 364], [679, 345], [685, 330], [701, 332], [713, 319], [712, 305], [695, 291],
-    [679, 284], [663, 278], [666, 262], [674, 239], [672, 210], [660, 178], [651, 145], [635, 125],
-    [618, 117], [597, 121], [584, 111], [570, 75], [548, 91], [530, 106], [510, 108], [501, 84],
-    [484, 94], [468, 108], [451, 112]
-  ];
-  let img, simulationBackground, simulationDragonMask, simulationMotionCanvas, simulationMotionContext, simulationEyelidTextures = [], canvas, g;
+  const SIMULATION_BREATH_CENTER = { x: 505, y: 350 };
+  let img, simulationBackground, simulationArtwork, simulationChestMask, simulationMotionCanvas, simulationMotionContext;
+  let eyelidTextures = [], simulationEyelidTextures = [], canvas, g;
   let mouthSprites = [], simulationMouthSprites = [], simulationMode = false;
   let mouthDrive = 0, mouthDriveTarget = 0, mouthShapeTarget = 0;
   let mouthWeights = [1, 0, 0, 0], mouthStartWeights = [1, 0, 0, 0], mouthFadeElapsed = MOUTH_CROSSFADE_MS;
@@ -47,41 +42,67 @@ T.tombi = (() => {
       const closedContext = closedCanvas.getContext('2d', { willReadFrequently: true });
       closedContext.drawImage(sprites[0], 0, 0);
       const closedPixels = closedContext.getImageData(0, 0, closedCanvas.width, closedCanvas.height).data;
-      simulationMouthSprites = [null, ...sprites.slice(1).map((sprite) => {
+      const enhancedSprites = [sprites[0], ...sprites.slice(1).map((sprite, index) => {
         const canvas = document.createElement('canvas');
         canvas.width = sprite.naturalWidth;
         canvas.height = sprite.naturalHeight;
         const context = canvas.getContext('2d', { willReadFrequently: true });
         context.drawImage(sprite, 0, 0);
         const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-        const mask = context.createImageData(canvas.width, canvas.height);
         for (let i = 0; i < pixels.data.length; i += 4) {
-          const difference = Math.max(
-            Math.abs(pixels.data[i] - closedPixels[i]),
-            Math.abs(pixels.data[i + 1] - closedPixels[i + 1]),
-            Math.abs(pixels.data[i + 2] - closedPixels[i + 2]),
-          );
-          mask.data[i] = 255;
-          mask.data[i + 1] = 255;
-          mask.data[i + 2] = 255;
-          mask.data[i + 3] = Math.max(0, Math.min(255, (difference - 12) * 8));
+          for (let channel = 0; channel < 3; channel++) {
+            pixels.data[i + channel] = Math.max(0, Math.min(255,
+              closedPixels[i + channel] + (pixels.data[i + channel] - closedPixels[i + channel]) * MOUTH_CONTRAST));
+          }
         }
-        const maskCanvas = document.createElement('canvas');
-        maskCanvas.width = canvas.width;
-        maskCanvas.height = canvas.height;
-        maskCanvas.getContext('2d').putImageData(mask, 0, 0);
-        const softMask = document.createElement('canvas');
-        softMask.width = canvas.width;
-        softMask.height = canvas.height;
-        const maskContext = softMask.getContext('2d');
-        maskContext.filter = 'blur(1px)';
-        maskContext.drawImage(maskCanvas, 0, 0);
-        context.globalCompositeOperation = 'destination-in';
-        context.drawImage(softMask, 0, 0);
-        return canvas;
+        context.putImageData(pixels, 0, 0);
+        return buildAnimatedMouthFrame(sprites[0], canvas, MOUTH_FRAME_SCALES[index + 1]);
       })];
-      mouthSprites = sprites;
+      mouthSprites = enhancedSprites;
     });
+  }
+
+  function buildAnimatedMouthFrame(closedSprite, openSprite, verticalScale, anchorY = MOUTH_ANCHOR_Y, maskShape = MOUTH_MASK, transparentOutsideMask = false) {
+    const frame = document.createElement('canvas');
+    frame.width = closedSprite.naturalWidth || closedSprite.width;
+    frame.height = closedSprite.naturalHeight || closedSprite.height;
+    const frameContext = frame.getContext('2d');
+    frameContext.drawImage(closedSprite, 0, 0);
+
+    const movingMouth = document.createElement('canvas');
+    movingMouth.width = frame.width;
+    movingMouth.height = frame.height;
+    const movingContext = movingMouth.getContext('2d');
+    movingContext.translate(0, anchorY * (1 - verticalScale));
+    movingContext.scale(1, verticalScale);
+    movingContext.drawImage(openSprite, 0, 0);
+
+    const mask = document.createElement('canvas');
+    mask.width = frame.width;
+    mask.height = frame.height;
+    const maskContext = mask.getContext('2d');
+    maskContext.save();
+    maskContext.translate(maskShape.x, maskShape.y);
+    maskContext.scale(1, maskShape.ry / maskShape.rx);
+    const gradient = maskContext.createRadialGradient(0, 0, maskShape.rx * 0.78, 0, 0, maskShape.rx);
+    gradient.addColorStop(0, '#fff');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    maskContext.fillStyle = gradient;
+    maskContext.beginPath();
+    maskContext.arc(0, 0, maskShape.rx, 0, Math.PI * 2);
+    maskContext.fill();
+    maskContext.restore();
+
+    movingContext.setTransform(1, 0, 0, 1, 0, 0);
+    movingContext.globalCompositeOperation = 'destination-in';
+    movingContext.drawImage(mask, 0, 0);
+    frameContext.drawImage(movingMouth, 0, 0);
+    if (transparentOutsideMask) {
+      // Simulation frames sit above the breathing chest, not an opaque face/chest crop.
+      frameContext.globalCompositeOperation = 'destination-in';
+      frameContext.drawImage(mask, 0, 0);
+    }
+    return frame;
   }
 
   function setMouthShape(shape) {
@@ -94,7 +115,8 @@ T.tombi = (() => {
   function updateMouthFade(dt) {
     if (mouthFadeElapsed >= MOUTH_CROSSFADE_MS) return;
     mouthFadeElapsed = Math.min(MOUTH_CROSSFADE_MS, mouthFadeElapsed + dt);
-    const progress = mouthFadeElapsed / MOUTH_CROSSFADE_MS;
+    const rawProgress = mouthFadeElapsed / MOUTH_CROSSFADE_MS;
+    const progress = rawProgress * rawProgress * (3 - 2 * rawProgress);
     mouthWeights = mouthStartWeights.map((weight, index) =>
       weight * (1 - progress) + (index === mouthShapeTarget ? progress : 0));
   }
@@ -129,6 +151,8 @@ T.tombi = (() => {
             buildMouth(src),
             loadAsset('simulation-forest-bg.png', (asset) => { simulationBackground = asset; }, 'Unable to load simulation background image'),
           ]);
+          simulationArtwork = simulationBackground;
+          eyelidTextures = buildEyelidTextures(img, EYES, img.naturalWidth / BASE, img.naturalHeight / BASE);
           buildSimulationMotionLayer();
           resize();
           requestAnimationFrame(loop);
@@ -151,50 +175,107 @@ T.tombi = (() => {
   }
   window.addEventListener('resize', resize);
 
+  function buildEyelidTextures(source, eyes, sourceScaleX = 1, sourceScaleY = 1) {
+    const sourcePixelsCanvas = document.createElement('canvas');
+    sourcePixelsCanvas.width = source.naturalWidth;
+    sourcePixelsCanvas.height = source.naturalHeight;
+    const sourcePixelsContext = sourcePixelsCanvas.getContext('2d', { willReadFrequently: true });
+    sourcePixelsContext.drawImage(source, 0, 0);
+    const sourcePixels = sourcePixelsContext.getImageData(0, 0, sourcePixelsCanvas.width, sourcePixelsCanvas.height);
+    const sampleColor = (x, y) => {
+      const pixel = (Math.round(y) * sourcePixels.width + Math.round(x)) * 4;
+      if (sourcePixels.data[pixel + 3] < 128) throw new Error('Unable to sample fur color for eyelid');
+      return [sourcePixels.data[pixel], sourcePixels.data[pixel + 1], sourcePixels.data[pixel + 2]];
+    };
+
+    return eyes.map((eye) => {
+      const lid = { ...eye, rx: eye.rx * 0.88, ry: eye.ry * 0.82 };
+      const createTexture = (side) => {
+        const patch = document.createElement('canvas');
+        patch.width = Math.ceil(lid.rx * 2);
+        patch.height = Math.ceil(lid.ry);
+        const context = patch.getContext('2d');
+        const pixels = context.createImageData(patch.width, patch.height);
+        const sampleXOffset = lid.rx * 0.12 + 2;
+        const sampleLeftX = (eye.x - lid.rx - sampleXOffset) * sourceScaleX;
+        const sampleRightX = (eye.x + lid.rx + sampleXOffset) * sourceScaleX;
+        const smoothRadius = Math.max(1, Math.round(patch.height * 0.06));
+        for (let y = 0; y < patch.height; y++) {
+          const sourceY = side === 'upper'
+            ? (eye.y - lid.ry + y * lid.ry / patch.height) * sourceScaleY
+            : (eye.y + y * lid.ry / patch.height) * sourceScaleY;
+          const leftColor = [0, 0, 0];
+          const rightColor = [0, 0, 0];
+          for (let offset = -smoothRadius; offset <= smoothRadius; offset++) {
+            const sampleY = sourceY + offset * sourceScaleY;
+            const leftSample = sampleColor(sampleLeftX, sampleY);
+            const rightSample = sampleColor(sampleRightX, sampleY);
+            for (let channel = 0; channel < 3; channel++) {
+              leftColor[channel] += leftSample[channel];
+              rightColor[channel] += rightSample[channel];
+            }
+          }
+          const sampleCount = smoothRadius * 2 + 1;
+          for (let x = 0; x < patch.width; x++) {
+            const mix = x / (patch.width - 1);
+            const pixel = (y * patch.width + x) * 4;
+            for (let channel = 0; channel < 3; channel++) {
+              const left = leftColor[channel] / sampleCount;
+              const right = rightColor[channel] / sampleCount;
+              pixels.data[pixel + channel] = left * (1 - mix) + right * mix;
+            }
+            const normalizedX = (mix - 0.5) * 2;
+            const normalizedY = side === 'upper' ? y / patch.height - 1 : y / patch.height;
+            const edgeDistance = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY);
+            pixels.data[pixel + 3] = Math.round(255 * Math.min(1, Math.max(0, (1 - edgeDistance) / 0.1)));
+          }
+        }
+        context.putImageData(pixels, 0, 0);
+        return patch;
+      };
+      return { upper: createTexture('upper'), lower: createTexture('lower') };
+    });
+  }
+
   function buildSimulationMotionLayer() {
     const width = simulationBackground.naturalWidth;
     const height = simulationBackground.naturalHeight;
-    simulationEyelidTextures = SIMULATION_EYES.map((eye) => {
-      const patch = document.createElement('canvas');
-      patch.width = Math.ceil(eye.rx * 2);
-      patch.height = Math.ceil(eye.ry * 2);
-      const patchContext = patch.getContext('2d', { willReadFrequently: true });
-      const top = eye.y - eye.ry;
-      patchContext.drawImage(simulationBackground,
-        eye.x - eye.rx, top - eye.ry * 0.55, eye.rx * 2, eye.ry * 0.45,
-        0, 0, patch.width, patch.height);
-      const texture = patchContext.getImageData(0, 0, patch.width, patch.height);
-      for (let y = 0; y < patch.height; y++) {
-        for (let x = 0; x < patch.width; x++) {
-          const nx = (x + 0.5 - eye.rx) / eye.rx;
-          const ny = (y + 0.5 - eye.ry) / eye.ry;
-          const edge = (1 - Math.sqrt(nx * nx + ny * ny)) * Math.min(eye.rx, eye.ry);
-          const feather = Math.max(0, Math.min(1, edge / 2.5));
-          const alphaIndex = (y * patch.width + x) * 4 + 3;
-          texture.data[alphaIndex] *= feather * feather * (3 - 2 * feather);
-        }
-      }
-      patchContext.putImageData(texture, 0, 0);
-      return patch;
-    });
+    const mouthWidth = SIMULATION_MOUTH_BOX.w;
+    const mouthHeight = SIMULATION_MOUTH_BOX.h;
+    const simulationMouth = document.createElement('canvas');
+    simulationMouth.width = mouthWidth;
+    simulationMouth.height = mouthHeight;
+    simulationMouth.getContext('2d').drawImage(simulationArtwork,
+      SIMULATION_MOUTH_BOX.x, SIMULATION_MOUTH_BOX.y, mouthWidth, mouthHeight,
+      0, 0, mouthWidth, mouthHeight);
+    const mouthScaleX = mouthWidth / MOUTH_BOX.w;
+    const mouthScaleY = mouthHeight / MOUTH_BOX.h;
+    const simulationMask = {
+      x: MOUTH_MASK.x * mouthScaleX,
+      y: MOUTH_MASK.y * mouthScaleY,
+      rx: MOUTH_MASK.rx * mouthScaleX,
+      ry: MOUTH_MASK.ry * mouthScaleY,
+    };
+    simulationMouthSprites = SIMULATION_MOUTH_FRAME_SCALES.map((scale) => buildAnimatedMouthFrame(
+      simulationMouth,
+      simulationMouth,
+      scale,
+      MOUTH_ANCHOR_Y * mouthScaleY,
+      simulationMask,
+      true,
+    ));
 
-    const outline = document.createElement('canvas');
-    outline.width = width;
-    outline.height = height;
-    const outlineContext = outline.getContext('2d');
-    outlineContext.beginPath();
-    outlineContext.moveTo(...SIMULATION_DRAGON_OUTLINE[0]);
-    SIMULATION_DRAGON_OUTLINE.slice(1).forEach(([x, y]) => outlineContext.lineTo(x, y));
-    outlineContext.closePath();
-    outlineContext.fillStyle = '#fff';
-    outlineContext.fill();
+    simulationEyelidTextures = buildEyelidTextures(simulationBackground, SIMULATION_EYES);
 
-    simulationDragonMask = document.createElement('canvas');
-    simulationDragonMask.width = width;
-    simulationDragonMask.height = height;
-    const maskContext = simulationDragonMask.getContext('2d');
-    maskContext.filter = 'blur(1.5px)';
-    maskContext.drawImage(outline, 0, 0);
+    simulationChestMask = document.createElement('canvas');
+    simulationChestMask.width = width;
+    simulationChestMask.height = height;
+    const maskContext = simulationChestMask.getContext('2d');
+    maskContext.filter = 'blur(6px)';
+    maskContext.beginPath();
+    maskContext.ellipse(SIMULATION_BREATH_CENTER.x, SIMULATION_BREATH_CENTER.y, 40, 30, 0, 0, Math.PI * 2);
+    maskContext.fillStyle = '#fff';
+    maskContext.fill();
 
     simulationMotionCanvas = document.createElement('canvas');
     simulationMotionCanvas.width = width;
@@ -281,43 +362,41 @@ T.tombi = (() => {
       const backgroundHeight = simulationBackground.naturalHeight * backgroundScale;
       const backgroundX = (W - backgroundWidth) / 2;
       const backgroundY = (H - backgroundHeight) / 2;
-      g.drawImage(simulationBackground, backgroundX, backgroundY, backgroundWidth, backgroundHeight);
+      g.drawImage(simulationArtwork, backgroundX, backgroundY, backgroundWidth, backgroundHeight);
 
-      const breath = 1 + 0.009 * Math.sin((ts * Math.PI * 2) / 3600);
-      const breathLift = -1.5 * Math.max(0, Math.sin((ts * Math.PI * 2) / 3600));
+      const breathPhase = (ts * Math.PI * 2) / 3600;
+      const breath = 1 + 0.1 * Math.sin(breathPhase);
+      const breathLift = -2.5 * Math.max(0, Math.sin(breathPhase));
       simulationMotionContext.clearRect(0, 0, simulationMotionCanvas.width, simulationMotionCanvas.height);
       simulationMotionContext.save();
       simulationMotionContext.translate(SIMULATION_BREATH_CENTER.x, SIMULATION_BREATH_CENTER.y + breathLift);
-      simulationMotionContext.scale(breath, breath);
+      simulationMotionContext.scale(breath, 1 + (breath - 1) * 1.3);
       simulationMotionContext.translate(-SIMULATION_BREATH_CENTER.x, -SIMULATION_BREATH_CENTER.y);
-      simulationMotionContext.drawImage(simulationBackground, 0, 0);
+      simulationMotionContext.drawImage(simulationArtwork, 0, 0);
       simulationMotionContext.restore();
       simulationMotionContext.globalCompositeOperation = 'destination-in';
-      simulationMotionContext.drawImage(simulationDragonMask, 0, 0);
+      simulationMotionContext.drawImage(simulationChestMask, 0, 0);
       simulationMotionContext.globalCompositeOperation = 'source-over';
+      // Add premultiplied masked pixels after removing the same coverage.
+      // source-over here would attenuate the soft edge twice and leave a dark seam.
+      g.save();
+      g.globalCompositeOperation = 'destination-out';
+      g.drawImage(simulationChestMask, backgroundX, backgroundY, backgroundWidth, backgroundHeight);
+      g.globalCompositeOperation = 'lighter';
       g.drawImage(simulationMotionCanvas, backgroundX, backgroundY, backgroundWidth, backgroundHeight);
-
+      g.restore();
       g.save();
       g.translate(backgroundX, backgroundY);
       g.scale(backgroundScale, backgroundScale);
-      g.translate(SIMULATION_BREATH_CENTER.x, SIMULATION_BREATH_CENTER.y + breathLift);
-      g.scale(breath, breath);
-      g.translate(-SIMULATION_BREATH_CENTER.x, -SIMULATION_BREATH_CENTER.y);
-      const mouthOpen = mouthWeights[1] * 0.2 + mouthWeights[2] * 0.6 + mouthWeights[3];
-      const mouthCenterX = SIMULATION_MOUTH_BOX.x + SIMULATION_MOUTH_BOX.w / 2;
-      const mouthCenterY = SIMULATION_MOUTH_BOX.y + SIMULATION_MOUTH_BOX.h / 2;
-      g.translate(mouthCenterX, mouthCenterY);
-      g.scale(1, 1 + mouthOpen * 0.55);
-      g.translate(-mouthCenterX, -mouthCenterY);
       g.save();
       MOUTH_SHAPES.forEach((_, index) => {
-        if (index === 0 || mouthWeights[index] <= 0) return;
+        if (mouthWeights[index] <= 0) return;
         g.globalAlpha = mouthWeights[index];
         g.drawImage(simulationMouthSprites[index], SIMULATION_MOUTH_BOX.x, SIMULATION_MOUTH_BOX.y,
           SIMULATION_MOUTH_BOX.w, SIMULATION_MOUTH_BOX.h);
       });
       g.restore();
-      drawBlink(SIMULATION_EYES, simulationBackground, 1);
+      drawBlink(SIMULATION_EYES);
       g.restore();
 
       g.save();
@@ -341,13 +420,13 @@ T.tombi = (() => {
     g.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, 0, 0, BASE, BASE);
     g.save();
     MOUTH_SHAPES.forEach((_, index) => {
-      if (index === 0 || mouthWeights[index] <= 0) return;
+      if (mouthWeights[index] <= 0) return;
       g.globalAlpha = mouthWeights[index];
       g.drawImage(mouthSprites[index], MOUTH_BOX.x * SOURCE_SCALE, MOUTH_BOX.y * SOURCE_SCALE,
         MOUTH_BOX.w * SOURCE_SCALE, MOUTH_BOX.h * SOURCE_SCALE);
     });
     g.restore();
-    drawBlink(EYES, img, img.naturalWidth / BASE);
+    drawBlink(EYES);
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.translate(W / 2, H / 2);
     g.scale(sc, sc);
@@ -355,51 +434,57 @@ T.tombi = (() => {
     drawLights(ts);
   }
 
-  function drawBlink(eyes, source, sourceScale) {
+  function drawBlink(eyes) {
     if (blink <= 0) return;
-    const progress = blink > 0.5 ? (1 - blink) * 2 : blink * 2;
+    const rawProgress = blink > 0.5 ? (1 - blink) * 2 : blink * 2;
+    const progress = rawProgress * rawProgress * (3 - 2 * rawProgress);
     eyes.forEach((eye, index) => {
-      const height = eye.ry * 0.92 * progress;
-      if (height <= 0) return;
-      const top = eye.y - eye.ry;
-      const width = eye.rx * 2;
-      const left = eye.x - eye.rx;
+      if (progress <= 0) return;
+      const lidRx = eye.rx * 0.88;
+      const lidRy = eye.ry * 0.82;
+      const top = eye.y - lidRy;
+      const width = lidRx * 2;
+      const left = eye.x - lidRx;
+      const bottom = eye.y + lidRy;
       g.save();
-      if (simulationMode) {
-        const lidDepth = eye.ry * 2 * progress;
-        if (lidDepth > 0) {
-          const lidCurve = eye.ry * 0.24 * progress;
-          const lidEdgeY = top + lidDepth;
-          g.beginPath();
-          g.ellipse(eye.x, eye.y, eye.rx, eye.ry, 0, 0, Math.PI * 2);
-          g.clip();
-          g.beginPath();
-          g.moveTo(left + 2, top);
-          g.lineTo(left + width - 2, top);
-          g.lineTo(left + width - 2, lidEdgeY);
-          g.quadraticCurveTo(eye.x, lidEdgeY + lidCurve, left + 2, lidEdgeY);
-          g.closePath();
-          g.clip();
-          g.drawImage(simulationEyelidTextures[index], left, top, width, eye.ry * 2);
-          if (progress > 0.68) {
-            g.strokeStyle = `rgba(52, 45, 38, ${(progress - 0.68) * 1.2})`;
-            g.lineWidth = 0.9 + progress * 0.8;
-            g.lineCap = 'round';
-            g.beginPath();
-            g.moveTo(left + 7, eye.y - 1);
-            g.quadraticCurveTo(eye.x, eye.y + eye.ry * 0.2, left + width - 7, eye.y - 1);
-            g.stroke();
-          }
-        }
-      } else {
+      g.beginPath();
+      g.ellipse(eye.x, eye.y, lidRx, lidRy, 0, 0, Math.PI * 2);
+      g.clip();
+      const texture = simulationMode ? simulationEyelidTextures[index] : eyelidTextures[index];
+      const upperEdgeY = top + lidRy * progress;
+      const upperCurve = lidRy * 0.08 * progress;
+      g.beginPath();
+      g.moveTo(left + 2, top);
+      g.lineTo(left + width - 2, top);
+      g.lineTo(left + width - 2, upperEdgeY);
+      g.quadraticCurveTo(eye.x, upperEdgeY + upperCurve, left + 2, upperEdgeY);
+      g.closePath();
+      g.clip();
+      g.drawImage(texture.upper, left, top, width, lidRy);
+      g.restore();
+
+      g.save();
+      g.beginPath();
+      g.ellipse(eye.x, eye.y, lidRx, lidRy, 0, 0, Math.PI * 2);
+      g.clip();
+      const lowerEdgeY = bottom - lidRy * progress;
+      const lowerCurve = lidRy * 0.08 * progress;
+      g.beginPath();
+      g.moveTo(left + 2, bottom);
+      g.lineTo(left + width - 2, bottom);
+      g.lineTo(left + width - 2, lowerEdgeY);
+      g.quadraticCurveTo(eye.x, lowerEdgeY - lowerCurve, left + 2, lowerEdgeY);
+      g.closePath();
+      g.clip();
+      g.drawImage(texture.lower, left, eye.y, width, lidRy);
+      if (progress > 0.68) {
+        g.strokeStyle = `rgba(52, 45, 38, ${(progress - 0.68) * 0.7})`;
+        g.lineWidth = 0.7 + progress * 0.55;
+        g.lineCap = 'round';
         g.beginPath();
-        g.ellipse(eye.x, eye.y, eye.rx, eye.ry, 0, 0, Math.PI * 2);
-        g.clip();
-        const band = eye.ry * 0.8;
-        g.drawImage(source,
-          left * sourceScale, (top - band) * sourceScale,
-          width * sourceScale, band * sourceScale,
-          left, top, width, height * 2);
+        g.moveTo(left + lidRx * 0.28, eye.y);
+        g.quadraticCurveTo(eye.x, eye.y + lidRy * 0.1, left + width - lidRx * 0.28, eye.y);
+        g.stroke();
       }
       g.restore();
     });

@@ -7,6 +7,7 @@
   const escHome = (s) => esc(stripHomeEmoji(s));
   const IMG = window.TOMBI_IMG || 'assets/tombi.jpg';
   const DEMO = !!window.TOMBI_DEMO; // the online demo: no microphone, no printing or file downloads
+  const DEMO_REPORT = new URLSearchParams(window.location.search).get('demo') === '1';
   const parentChildId = new URLSearchParams(window.location.search).get('parent');
   const PARENT_MODE = !!parentChildId;
   window.TOMBI_PARENT_MODE = PARENT_MODE;
@@ -126,7 +127,10 @@
       .map((key) => s.stages && s.stages[key])
       .filter((stage) => stage && !stage.skipped && Number.isFinite(stage.score))
       .map((stage) => stage.score);
-    return scores.length ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : null;
+    return scores.length ? {
+      score: Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length),
+      count: scores.length,
+    } : null;
   }
   const homeSessions = (id) => T.store.sessionsOf(id).filter((s) => s.mode !== 'sim');
   function childLastSession(child) {
@@ -153,18 +157,36 @@
     if (days < 30) return `לפני ${days} ימים`;
     return new Date(timestamp).toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
   }
-  function homeSpark(values, color) {
-    if (!values.length) return '';
-    const w = 220, h = 38, pad = 4;
-    const min = Math.max(0, Math.min(...values) - 5);
-    const max = Math.min(100, Math.max(...values) + 5) || 1;
-    const x = (i) => pad + (i * (w - 2 * pad)) / Math.max(1, values.length - 1);
-    const y = (v) => h - pad - ((v - min) / Math.max(1, max - min)) * (h - 2 * pad);
-    const points = values.map((value, i) => [x(i), y(value)]);
+  function homeTrend(values, color) {
+    if (!values.length) return '<p class="kid-trend-empty">אין עדיין ציונים מסכמים להצגת מגמה</p>';
+    const visible = values.slice(-5);
+    const w = 360, h = 132, left = 44, right = 350, top = 12, bottom = 96;
+    const x = (i) => visible.length === 1 ? (left + right) / 2 : left + (i * (right - left)) / (visible.length - 1);
+    const y = (score) => bottom - (Math.max(0, Math.min(100, score)) / 100) * (bottom - top);
+    const points = visible.map((entry, i) => [x(i), y(entry.score)]);
     const path = points.map((point, i) => `${i ? 'L' : 'M'}${point[0].toFixed(1)} ${point[1].toFixed(1)}`).join(' ');
-    return `<svg class="sparkline" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="מגמת הציון במפגשים" style="--child-color:${color}">
-      <path d="${path}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-    </svg>`;
+    const grid = [100, 50, 0].map((tick) => `<line class="kid-trend-gridline" x1="${left}" y1="${y(tick)}" x2="${right}" y2="${y(tick)}"/><text class="kid-trend-tick" x="${left - 7}" y="${y(tick) + 4}" text-anchor="end">${tick}</text>`).join('');
+    const marks = points.map(([px, py], i) => {
+      const entry = visible[i];
+      const radius = i === points.length - 1 ? 5 : 3.5;
+      const labelX = px + (i === 0 ? 8 : i === points.length - 1 ? -8 : 0);
+      const labelAnchor = i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle';
+      const labelY = py < top + 16 ? py + 17 : py - 9;
+      return `<g><title>מפגש ${entry.sessionNumber}: ציון ${entry.score} מתוך 100, על בסיס ${entry.count} מדדים</title><circle class="kid-trend-point${i === points.length - 1 ? ' is-latest' : ''}" cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${radius}"/><text class="kid-trend-value" x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="${labelAnchor}">${entry.score}</text><text class="kid-trend-session" x="${px.toFixed(1)}" y="117" text-anchor="middle">${entry.sessionNumber}</text></g>`;
+    }).join('');
+    const rangeLabel = visible.length < values.length
+      ? ` · מוצגים ${visible.length} המפגשים האחרונים מתוך ${values.length}`
+      : '';
+    return `<figure class="kid-trend">
+      <figcaption>ציון מסכם לאורך מפגשים עם ציון${rangeLabel}</figcaption>
+      <svg viewBox="0 0 ${w} ${h}" role="img" aria-label="ציון מסכם בכל מפגש עם ציר קבוע מאפס עד מאה">
+        <title>מגמת הציון המסכם; הציר האנכי מאפס עד מאה, והמספרים מציינים מפגשים</title>
+        ${grid}
+        <path class="kid-trend-line" d="${path}" stroke="${color}"/>
+        ${marks}
+      </svg>
+      <p class="kid-trend-note">ציון מתוך 100 · מספרי המפגשים מופיעים בציר התחתון</p>
+    </figure>`;
   }
   function scoreRing(score, color, empty = false) {
     const value = score === null ? 0 : Math.max(0, Math.min(100, score));
@@ -289,11 +311,11 @@
       $('#home-stats').innerHTML = '';
       list.innerHTML = `<div class="home-empty card">
         <h3>עוד אין ילדים</h3>
-        <p>מוסיפים ילד ומתחילים מפגש, או פותחים ילד לדוגמה כדי לראות איך נראים הכרטיסים והדוח.</p>
-        <div class="row"><button class="btn" data-empty="add" type="button">ילד חדש</button><button class="btn btn-secondary" data-empty="sample" type="button">ילד לדוגמה</button></div>
+        <p>אפשר לפתוח דוח מוכן עם חמישה מפגשים וגרפי התקדמות, או להתחיל עם ילד חדש.</p>
+        <div class="row"><button class="btn" data-empty="add" type="button">ילד חדש</button><button class="btn btn-secondary" data-empty="sample" type="button">צפייה בדוח הדגמה</button></div>
       </div>`;
       $('[data-empty="add"]', list).onclick = () => openChildForm(null);
-      $('[data-empty="sample"]', list).onclick = () => { T.report.makeDemoData(); renderHome(); };
+      $('[data-empty="sample"]', list).onclick = openDemoReport;
       return;
     }
 
@@ -308,11 +330,16 @@
       const sessions = homeSessions(child.id);
       const allSessions = T.store.sessionsOf(child.id);
       const last = sessions[sessions.length - 1] || null;
-      const scores = sessions.map((session) => sessionScore(session)).filter((score) => score !== null);
-      const sparkScores = scores.slice(-12);
-      const currentScore = scores.length ? scores[scores.length - 1] : null;
-      const comparison = scores.length > 3 ? scores[scores.length - 4] : scores.length > 1 ? scores[0] : currentScore;
-      const delta = currentScore === null || comparison === null ? null : currentScore - comparison;
+      const scores = sessions.map((session, index) => {
+        const summary = sessionScore(session);
+        return summary ? { ...summary, sessionNumber: index + 1 } : null;
+      }).filter(Boolean);
+      const currentSummary = scores.length ? scores[scores.length - 1] : null;
+      const previousSummary = scores.length > 1 ? scores[scores.length - 2] : null;
+      const firstSummary = scores.length ? scores[0] : null;
+      const currentScore = currentSummary ? currentSummary.score : null;
+      const previousDelta = previousSummary ? currentScore - previousSummary.score : null;
+      const overallDelta = firstSummary && currentSummary ? currentScore - firstSummary.score : null;
       const staleDays = last ? Math.floor((Date.now() - last.date) / 86400000) : Infinity;
       const changes = last ? (last.levelChanges || []).filter((change) => change.from !== change.to) : [];
       const levelUp = changes.find((change) => change.to > change.from);
@@ -326,9 +353,19 @@
         const raised = changes.some((change) => change.task === task && change.to > change.from);
         return `<div class="task-row"><span class="task-name"><b>${label}</b><small>${T.levels.DESCRIPTIONS[task]}</small></span><span class="level-badge${raised ? ' is-up' : ''}">${raised ? 'שלב חדש · ' : ''}שלב ${level}</span><b class="task-score">${score === null ? '—' : score}</b></div>`;
       }).join('');
-      const startEngine = last && last.stages && last.stages.engineStart && T.ENGINE[last.stages.engineStart.choice];
-      const endEngine = last && last.stages && last.stages.engineEnd && T.ENGINE[last.stages.engineEnd.choice];
-      const engineLine = startEngine && endEngine ? `<p class="engine-line">מנוע: <b>${esc(startEngine.label)} ← ${esc(endEngine.label)}</b></p>` : '';
+      const scoredTaskCount = last && last.stages
+        ? HOME_TASKS.reduce((count, [task]) => {
+          const result = last.stages[task];
+          return count + (result && !result.skipped && Number.isFinite(result.score) ? 1 : 0);
+        }, 0)
+        : 0;
+      const startFeelingKey = last && last.stages && last.stages.engineStart && last.stages.engineStart.feeling;
+      const endFeelingKey = last && last.stages && last.stages.engineEnd && last.stages.engineEnd.feeling;
+      const startFeeling = T.FEELINGS[startFeelingKey];
+      const endFeeling = T.FEELINGS[endFeelingKey];
+      const feelingLine = startFeeling || endFeeling
+        ? `<p class="feeling-line">${startFeeling ? `בתחילת המפגש: <b>${esc(startFeeling.label)}</b>` : ''}${startFeeling && endFeeling ? ' · ' : ''}${endFeeling ? `בסיום: <b>${esc(endFeeling.label)}</b>` : ''}</p>`
+        : '';
       const tags = [
         child.id === nextId ? '<span class="tag teal">הבא בתור</span>' : '',
         isSample ? '<span class="tag gray">דוגמה</span>' : '',
@@ -337,10 +374,29 @@
         levelUp ? '<span class="tag amber">שלב חדש</span>' : levelDown ? '<span class="tag gray">שלב קל יותר</span>' : '',
       ].filter(Boolean).join('');
       const meta = `גיל ${esc(child.age)} · ${sessions.length} מפגשים${last ? ` · אחרון ${relativeHomeDate(last.date)}` : ''}`;
+      const formatDelta = (delta) => `${delta > 0 ? '+' : delta < 0 ? '−' : ''}${Math.abs(delta)} נקודות`;
       const body = last ? `<div class="kid-body">
-        <div class="kid-score">${scoreRing(currentScore, palette.color)}${delta === null ? '' : `<span class="score-delta${delta < 0 ? ' is-down' : ''}"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="${delta < 0 ? 'M12 5v14M7 14l5 5 5-5' : 'M12 19V5M7 10l5-5 5 5'}"/></svg>${Math.abs(delta)}</span>`}${homeSpark(sparkScores, palette.color)}</div>
+        <div class="kid-score-summary">
+          <p class="kid-score-label">${currentSummary ? `ציון מסכם · מפגש ${currentSummary.sessionNumber}${currentSummary.sessionNumber === sessions.length ? ' (האחרון)' : ' (האחרון עם ציון)'}` : 'ציון מסכם · אין נתונים'}</p>
+          <p class="kid-score-value"><strong>${currentScore === null ? '—' : currentScore}</strong><span>מתוך 100</span></p>
+          <p class="kid-score-note">${currentSummary ? `ממוצע של ${currentSummary.count} מתוך 4 מדדים` : 'לא נאספו ציונים מסכמים'}</p>
+        </div>
+        <div class="kid-overview">
+          <div class="kid-change-row">
+            <span>${previousSummary ? `לעומת מפגש קודם עם ציון (מס׳ ${previousSummary.sessionNumber}): ${previousSummary.score}/100 · ${previousSummary.count}/4 מדדים` : 'לעומת מפגש קודם עם ציון'}</span>
+            <strong>${previousDelta === null ? 'נדרשים שני מפגשים עם ציון' : formatDelta(previousDelta)}</strong>
+          </div>
+          <div class="kid-change-row">
+            <span>${firstSummary && firstSummary !== currentSummary ? `מאז מפגש ראשון עם ציון (מס׳ ${firstSummary.sessionNumber}): ${firstSummary.score}/100 · ${firstSummary.count}/4 מדדים` : 'התקדמות כללית'}</span>
+            <strong>${overallDelta === null || firstSummary === currentSummary ? 'המפגש הראשון · נקודת התחלה' : formatDelta(overallDelta)}</strong>
+          </div>
+          <p class="kid-overview-note">${scoredTaskCount === 0 ? 'לא נאספו ציונים בתחומים במפגש האחרון' : `${scoredTaskCount} תחומים עם ציון במפגש האחרון${levelUp ? ` · התקדמות בשלב ${esc(T.levels.NAMES[levelUp.task] || '')}` : ''}`}</p>
+        </div>
+      </div>${homeTrend(scores, palette.color)}
+      <details class="kid-task-details">
+        <summary><span>פירוט ציונים ורמות</span><span class="task-details-count">${HOME_TASKS.length} תחומים</span></summary>
         <div class="task-rows">${taskRows}</div>
-      </div>${engineLine}` : `<div class="kid-empty-session">${scoreRing(null, palette.color, true)}<p>עוד לא היה מפגש. טומבי מחכה!</p></div>`;
+      </details>${feelingLine}` : `<div class="kid-empty-session">${scoreRing(null, palette.color, true)}<p>עוד לא היה מפגש. טומבי מחכה!</p></div>`;
       return `<article class="card kid-card" style="--card-accent:${palette.color}">
         <header class="kid-head">
           <span class="kid-avatar" style="--avatar-bg:${palette.tint};--avatar-color:${palette.color}">${escHome(initials(child.name))}</span>
@@ -351,7 +407,7 @@
         <footer class="kid-foot">
           <button class="text-link" data-report="${esc(child.id)}" type="button">לדוח התקדמות ‹</button>
           <div class="kid-actions">
-            <button class="adult-icon-btn" data-pdf="${esc(child.id)}" type="button" aria-label="הורדת הדוח כ-PDF" title="${allSessions.length ? 'הורדת הדוח כ-PDF' : 'אין עדיין מפגשים'}"${!allSessions.length ? ' disabled' : ''}${DEMO ? ' hidden' : ''}>
+            <button class="adult-icon-btn" data-pdf="${esc(child.id)}" type="button" aria-label="שמירת הדוח כ-PDF" title="${allSessions.length ? 'פתיחת הדוח להדפסה או לשמירה כ-PDF' : 'אין עדיין מפגשים'}"${!allSessions.length ? ' disabled' : ''}${DEMO ? ' hidden' : ''}>
               <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9 14l3 3 3-3"/></svg>
             </button>
             <button class="adult-icon-btn" data-edit="${esc(child.id)}" type="button" aria-label="עריכת ${esc(child.name)}" title="עריכה"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button>
@@ -369,7 +425,7 @@
     $$('[data-pdf]', list).forEach((button) => {
       button.onclick = () => downloadHomeReport(T.store.getChild(button.dataset.pdf), button).catch((error) => {
         console.error('יצירת דוח PDF ממסך הבית נכשלה.', error);
-        window.alert('לא ניתן ליצור את ה-PDF. אפשר לנסות שוב או לבחור בהדפסה.');
+        window.alert('לא ניתן לפתוח את תצוגת ה-PDF. אפשר לנסות שוב.');
       });
     });
     $('[data-home-add]', list).onclick = () => openChildForm(null);
@@ -413,11 +469,10 @@
   async function downloadHomeReport(child, button) {
     if (!child) return;
     const container = document.createElement('div');
-    container.className = 'report';
-    container.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;background:#fff;direction:rtl;';
+    container.className = 'report pdf-report-document';
     document.body.appendChild(container);
     try {
-      T.report.render(child, container);
+      T.report.renderPdf(child, container);
       await T.pdf.download(container, reportFilename(child), button);
     } finally { container.remove(); }
   }
@@ -549,17 +604,16 @@
     $('#plan-quiet').checked = savedSetting.quietRoom !== false;
     $('#prep-name').textContent = c.name;
     $('#plan-approved').checked = false;
-    $('#prep-step-words').hidden = !!c.nonverbal;
-    updateTeachCounts();
     $('#voice-warn').hidden = T.tombi.hasHebrewVoice();
     renderPlan(true);
     if (T.audio.mode !== 'off') unlockPrep();
     show('prep');
   }
   const PLAN_PICTURES = {
-    wakeUp: 'cloud', engineStart: 'animals', engineEnd: 'cloud', echo: 'hands', loudness: 'tunnel',
+    wakeUp: 'cloud', engineStart: 'egg', engineEnd: 'egg', echo: 'hands', loudness: 'tunnel',
     magic: 'candle', snake: 'animals', stompFreeze: 'stop', jumps: 'cloud', turtleRabbit: 'animals',
     reverseDrum: 'hands', clapStomp: 'pot', ball: 'egg', elephantMouse: 'foot', march: 'foot',
+    crystalTower: 'crystal', calmingPotion: 'potion', emotionGuess: 'heart',
   };
   function readPlanSetting() {
     return {
@@ -606,6 +660,11 @@
       </div>`;
     }).join('');
     $('#plan-items').innerHTML = `<div class="oc-plan-items">${rows}</div>`;
+    const addable = T.tasks.all().filter((task) => task.slot === 'ot'
+      && !currentPlan.tasks.some((entry) => entry.key === task.key)
+      && T.planner.eligible(task, current, setting));
+    $('#plan-add-ot').innerHTML = addable.map((task) => `<option value="${esc(task.key)}">${esc(task.name)} · ${esc(task.domain)}</option>`).join('');
+    $('#plan-add-ot-row').hidden = !addable.length;
     const activeGoals = T.goals.activeApproved(current);
     $('#plan-goal-summary').hidden = !activeGoals.length;
     $('#plan-goal-summary').innerHTML = activeGoals.length
@@ -662,6 +721,18 @@
     renderPlan();
   });
   $('#plan-rebuild').onclick = () => { $('#plan-approved').checked = false; renderPlan(true); };
+  $('#plan-add-ot-btn').onclick = () => {
+    const task = T.tasks.get($('#plan-add-ot').value);
+    if (!currentPlan || !task || currentPlan.tasks.some((entry) => entry.key === task.key)) return;
+    const closing = currentPlan.tasks.findIndex((entry) => ['transition', 'calm'].includes(entry.slot) || entry.key === 'engineEnd');
+    const goals = T.goals.goalsForTask(current, task.key, true);
+    currentPlan.tasks.splice(closing < 0 ? currentPlan.tasks.length : closing, 0, {
+      key: task.key, name: task.name, domain: task.domain, slot: task.slot, reason: 'נוספה על ידי הסייעת',
+      short: false, pinned: false, optional: false, mandatory: false, isNew: false, goalIds: goals.map((goal) => goal.id),
+    });
+    if ($('#plan-approved')) $('#plan-approved').checked = false;
+    renderPlan();
+  };
   $('#plan-approved').addEventListener('change', refreshPlanApproval);
   function refreshPlanApproval() {
     const hasGoals = !!(current && T.goals.activeApproved(current).length);
@@ -682,7 +753,7 @@
     });
   });
   function unlockPrep() {
-    ['#prep-step-cal', '#prep-step-words', '#prep-step-go'].forEach((s) => $(s).classList.remove('is-locked'));
+    ['#prep-step-cal', '#prep-step-go'].forEach((s) => $(s).classList.remove('is-locked'));
     refreshPlanApproval();
     $('#btn-cal').disabled = false;
     $('#btn-mic').classList.toggle('is-active', T.audio.mode === 'mic');
@@ -714,28 +785,6 @@
   if (DEMO) $('#btn-mic').onclick = null;
   $('#btn-sim').onclick = () => startInput('sim');
   $('#btn-cal').onclick = async () => { $('#prep-readout').textContent = 'שקט בבקשה… מכייל'; await T.audio.calibrate(2000); $('#prep-readout').textContent = `רעש רקע ${Math.round(T.audio.floor)} dB`; };
-
-  function updateTeachCounts() {
-    const t = (current && current.templates) || {};
-    $$('.teach-btn').forEach((b) => { const n = (t[b.dataset.w] || []).length; $('small', b).textContent = n ? `✓ ${n}` : ''; });
-  }
-  $$('.teach-btn').forEach((b) => (b.onclick = async () => {
-    if (T.audio.mode === 'off') return;
-    const w = b.dataset.w, name = { turtle: 'צב', fish: 'דג', monkey: 'קוף' }[w];
-    $('#teach-status').textContent = `מקשיב… שהילד יגיד "${name}"`;
-    b.classList.add('is-listening');
-    const seg = await new Promise((res) => {
-      const off = T.audio.on((type, d) => { if (type === 'segment' && d.dur > 150 && d.dur < 2000) { off(); res(d); } });
-      setTimeout(() => { off(); res(null); }, 6000);
-    });
-    b.classList.remove('is-listening');
-    if (!seg) { $('#teach-status').textContent = 'לא שמעתי. אפשר לנסות שוב.'; return; }
-    const feats = T.dsp.mfcc(T.audio.grab(seg.start, seg.end));
-    T.store.addTemplate(current.id, w, feats);
-    current = T.store.getChild(current.id);
-    updateTeachCounts();
-    $('#teach-status').textContent = `נשמרה טביעת קול של "${name}" (${(seg.dur / 1000).toFixed(1)} שניות). ההקלטה עצמה נמחקה.`;
-  }));
 
   // ---------- meters ----------
   let meterRaf = new Map();
@@ -804,7 +853,17 @@
       if (r && !r.skipped) log(`שלב ${i + 1} הסתיים${Number.isFinite(r.score) ? ` · ציון ${r.score}` : ''}`);
       else log(`שלב ${i + 1} דולג`);
     },
-    aideEngine(v) { $('#aide-engine').hidden = !v; },
+    aideFeelings(v, title = '', options = []) {
+      const panel = $('#aide-feelings');
+      panel.hidden = !v;
+      if (!v) return;
+      $('#aide-feelings-title').textContent = title;
+      const list = $('#aide-feelings-options');
+      list.innerHTML = options.map((option) => `<button class="btn btn-ghost" data-pick="${esc(option.value)}" type="button">${esc(option.emoji)} ${esc(option.label)}</button>`).join('');
+      list.querySelectorAll('[data-pick]').forEach((button) => {
+        button.onclick = () => T.session.pickSelection(button.dataset.pick);
+      });
+    },
   };
   function log(msg) {
     const li = document.createElement('li');
@@ -876,7 +935,6 @@
     T.ui.flash(p ? 'מושהה' : 'ממשיכים');
   };
   $('#a-end').onclick = async () => { if (await confirmBox('לסיים את המפגש עכשיו? מה שנמדד עד כאן יישמר.')) T.session.abort(); };
-  $$('[data-pick]').forEach((b) => (b.onclick = () => T.session.pickEngine(b.dataset.pick)));
   $$('[data-assist]').forEach((b) => (b.onclick = () => {
     T.session.assist(b.dataset.assist);
     const n = (T.session.record?.assists || []).filter((a) => a.type !== 'repeat').length;
@@ -919,11 +977,22 @@
         : `<p class="level-change">${esc(current.name)} ${current.gender === 'f' ? 'תשחק' : 'ישחק'} בשלב ${change.to} ב${esc(task)} בפעם הבאה, כדי ${current.gender === 'f' ? 'שיהיה לה' : 'שיהיה לו'} כיף להצליח.</p>`;
     }).join('');
     const meetingDate = new Date(rec.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
+    const stageValue = (key, result) => {
+      if (result.skipped) return 'דולג';
+      if (key.startsWith('engine')) {
+        const feeling = T.FEELINGS[result.feeling];
+        return feeling ? `${esc(feeling.emoji)} ${esc(feeling.label)}${result.breathCount ? ` · ${result.breathsCompleted ?? result.breathCount} נשימות דרקון` : ''}` : '—';
+      }
+      if (result.ot && result.score == null) return esc(T.report.rawSummary(key, result) || '—');
+      return `${esc(result.score ?? '—')}${result.level ? ` · שלב ${result.level}` : ''}`;
+    };
     body.innerHTML = `<header class="pdf-session-head"><span class="ocupa-report-logo" aria-label="Ocupa"><svg class="ocupa-mark" viewBox="0 0 42 42" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="2" y="21" width="19" height="19"/><circle cx="31" cy="30.5" r="9.5"/><path d="M21 2 L31 20 L11 20 Z"/></g></svg><span class="ocupa-word" dir="ltr">ocupa</span></span><img src="assets/ocupa-tombi-cutout.png" alt=""><div><b>טומבי · סיכום מפגש</b><span>${esc(current.name)} · גיל ${esc(current.age)} · ${meetingDate}</span></div></header>
+      <p class="pdf-session-context">תיעוד המשימות והמדדים שנרשמו במפגש. הציונים מתארים ביצוע במשימות ואינם מהווים אבחון.</p>
       <ul class="done-list">${Object.entries(rec.stages).map(([k, r]) => `<li><span>${esc(names[k].name)}<small>${esc(names[k].domain)}</small></span>
-      <b>${r.skipped ? 'דולג' : k.startsWith('engine') ? (r.choice ? T.ENGINE[r.choice].emoji + ' ' + esc(T.ENGINE[r.choice].label) : '—') : `${esc(r.score)}${r.level ? ` · שלב ${r.level}` : ''}`}</b></li>`).join('')}</ul>
+      <b>${stageValue(k, r)}</b></li>`).join('')}</ul>
       ${changes}
-      <p class="hint">משך ${Math.round(rec.durationSec / 60)} דקות · עזרה של הסייעת: ${(rec.assists || []).filter((a) => a.type !== 'repeat').length}${rec.adultIgnored ? ` · ${rec.adultIgnored} קולות מבוגר לא נספרו` : ''}${rec.mode === 'sim' ? ' · מפגש סימולציה' : ''}</p>`;
+      <p class="hint">משך ${Math.round(rec.durationSec / 60)} דקות · עזרה של הסייעת: ${(rec.assists || []).filter((a) => a.type !== 'repeat').length}${rec.adultIgnored ? ` · ${rec.adultIgnored} קולות מבוגר לא נספרו` : ''}${rec.mode === 'sim' ? ' · מפגש סימולציה' : ''}</p>
+      <p class="pdf-session-context">הניתוח מתבצע במכשיר; הקלטות קול אינן נשמרות.</p>`;
     show('done');
   }
   $('#btn-done-report').onclick = () => openReport(T.store.getChild(current.id));
@@ -932,7 +1001,7 @@
     if (!rec || DEMO) return;
     const date = new Date(rec.date).toISOString().slice(0, 10);
     try { await T.pdf.download($('#done-body'), `טומבי - ${safeFilenamePart(current.name)} - מפגש ${date}.pdf`, e.currentTarget); }
-    catch (error) { console.error('יצירת סיכום PDF נכשלה.', error); window.alert('לא ניתן ליצור את ה-PDF. אפשר לנסות שוב או לבחור בהדפסה.'); }
+    catch (error) { console.error('פתיחת סיכום PDF נכשלה.', error); window.alert('לא ניתן לפתוח את תצוגת ה-PDF. אפשר לנסות שוב.'); }
   };
   function safeFilenamePart(value) {
     return String(value || 'ילד').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '').trim() || 'ילד';
@@ -944,6 +1013,12 @@
     T.report.render(c, $('#report-body'));
     if (DEMO) $$('[data-act="print"],[data-act="pdf"],[data-act="csv"],[data-act="mail"]', $('#report-body')).forEach((b) => (b.hidden = true));
     show('report');
+  }
+  function openDemoReport() {
+    T.report.makeDemoData();
+    const child = T.store.data.children.find((item) => item.demoKey === 'tom');
+    if (!child) throw new Error('לא ניתן לפתוח את דוח ההדגמה: פרופיל הדוגמה לא נוצר.');
+    openReport(child);
   }
   $('#report-body').addEventListener('click', async (e) => {
     const b = e.target.closest('button');
@@ -972,10 +1047,19 @@
       }
       return;
     }
-    if (act === 'print') window.print();
-    if (act === 'pdf' && !DEMO) {
-      try { await T.pdf.download($('#report-body'), `טומבי - ${safeFilenamePart(current.name)} - דוח התקדמות - ${new Date().toISOString().slice(0, 10)}.pdf`, b); }
-      catch (error) { console.error('יצירת דוח PDF נכשלה.', error); window.alert('לא ניתן ליצור את ה-PDF. אפשר לנסות שוב או לבחור בהדפסה.'); }
+    if ((act === 'print' || act === 'pdf') && !DEMO) {
+      const printableReport = document.createElement('main');
+      printableReport.className = 'pdf-report-document';
+      document.body.appendChild(printableReport);
+      try {
+        T.report.renderPdf(current, printableReport);
+        await T.pdf.download(printableReport, `טומבי - ${safeFilenamePart(current.name)} - דוח התקדמות - ${new Date().toISOString().slice(0, 10)}.pdf`, b);
+      } catch (error) {
+        console.error('יצירת דוח PDF נכשלה.', error);
+        window.alert('לא ניתן לפתוח את תצוגת ה-PDF. אפשר לנסות שוב או לבחור בהדפסה.');
+      } finally {
+        printableReport.remove();
+      }
     }
     if (act === 'copy') {
       const t = T.report.summaryText(current);
@@ -988,6 +1072,7 @@
       location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(T.report.summaryText(current))}`;
     }
     if (act === 'csv') download(`tombi-${current.name}.csv`, T.report.csv(current), 'text/csv;charset=utf-8');
+    if (act === 'ot-json') download(`tombi-${current.name}-ot-metrics.json`, JSON.stringify(T.ot.exportChild(current, T.store.sessionsOf(current.id)), null, 2), 'application/json;charset=utf-8');
     if (b.dataset.del && (await confirmBox('למחוק את המפגש הזה?'))) { T.store.removeSession(b.dataset.del); openReport(current); }
   });
   function download(name, text, type) {
@@ -1098,6 +1183,8 @@
     } else {
       openPrep(linkedChild);
     }
+  } else if (DEMO_REPORT) {
+    openDemoReport();
   }
   if (T.sync) void T.sync.start();
 })();

@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ocupa Game</title>
-<link rel="icon" type="image/svg+xml" href="assets/ocupa-mark.svg?v=2">
+<link rel="icon" type="image/svg+xml" href="assets/ocupa-mark.svg?v=5">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&family=Fredoka:wght@500;600;700&family=Rubik:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=20261025-ot-engine">
 <link rel="stylesheet" href="css/cloud-sync.css">
 <script src="https://www.gstatic.com/firebasejs/13.0.0/firebase-app-compat.js" defer></script>
 <script src="https://www.gstatic.com/firebasejs/13.0.0/firebase-auth-compat.js" defer></script>
@@ -148,6 +148,10 @@
         <header><h2 id="session-plan-title">תוכנית המפגש</h2><button class="btn btn-ghost btn-small" id="plan-rebuild" type="button">תכנון מחדש</button></header>
         <section id="plan-goal-summary" class="goal-plan-summary" hidden aria-live="polite"></section>
         <div id="plan-items"></div>
+        <div class="oc-plan-add" id="plan-add-ot-row">
+          <label>הוספת משימת ריפוי בעיסוק <select id="plan-add-ot" aria-label="משימת ריפוי בעיסוק להוספה"></select></label>
+          <button class="btn btn-ghost btn-small" id="plan-add-ot-btn" type="button">הוספה לתוכנית</button>
+        </div>
         <p id="plan-warning" class="warn" role="status" hidden></p>
         <label id="plan-approval-row" class="check plan-approval" hidden>
           <input id="plan-approved" type="checkbox"> בדקתי ואישרתי את תוכנית המפגש ביחס למטרות הילד
@@ -183,18 +187,8 @@
           <div class="meter-box"><canvas id="prep-meter" width="600" height="60" aria-label="עוצמת הקול בחדר"></canvas><span id="prep-readout" class="readout">—</span></div>
           <button class="btn btn-ghost" id="btn-cal" type="button" disabled>כיול מחדש</button>
         </li>
-        <li id="prep-step-words" class="is-locked">
-          <h3>3. ללמד את טומבי את המילים (לא חובה)</h3>
-          <p class="hint">הילד אומר פעם אחת כל מילה. נשמרת רק "טביעת קול" מספרית, לא הקלטה. גם בלי זה הפעילויות עובדות: כשטומבי לא בטוח, הילד מצביע או הסייעת לוחצת, וטומבי לומד מזה.</p>
-          <div class="teach">
-            <button class="teach-btn" data-w="turtle" type="button"><span aria-hidden="true">🐢</span> צב <small></small></button>
-            <button class="teach-btn" data-w="fish" type="button"><span aria-hidden="true">🐟</span> דג <small></small></button>
-            <button class="teach-btn" data-w="monkey" type="button"><span aria-hidden="true">🐒</span> קוף <small></small></button>
-          </div>
-          <p class="hint" id="teach-status" aria-live="polite"></p>
-        </li>
         <li id="prep-step-go" class="is-locked">
-          <h3>4. מתחילים</h3>
+          <h3>3. מתחילים</h3>
           <p class="warn" id="voice-warn" hidden>לא נמצא קול עברי בדפדפן, אז טומבי יזיז את הפה ויציג את הטקסט בבועה. אפשר להתקין קול עברי (הוראות בהגדרות) או להקליט את השורות של טומבי בקול שלך.</p>
           <p class="hint">במהלך המפגש הילד רואה רק את טומבי, על כל המסך. פאנל הסייעת נפתח בלחיצה ארוכה (שנייה) על הפינה העליונה בצד שמאל, או במקש <kbd>A</kbd>.</p>
           <button class="btn btn-big" id="btn-start" type="button" disabled>להתחיל את המפגש</button>
@@ -241,13 +235,9 @@
           <button class="btn btn-danger-ghost" id="a-end" type="button">סיום מפגש</button>
         </div>
       </div>
-      <div class="aide-sec" id="aide-engine" hidden>
-        <h4>הילד הצביע על:</h4>
-        <div class="grid3">
-          <button class="btn btn-ghost" data-pick="turtle" type="button">🐢 צב</button>
-          <button class="btn btn-ghost" data-pick="fish" type="button">🐟 דג</button>
-          <button class="btn btn-ghost" data-pick="monkey" type="button">🐒 קוף</button>
-        </div>
+      <div class="aide-sec" id="aide-feelings" hidden>
+        <h4 id="aide-feelings-title">הילד בחר או סיפר:</h4>
+        <div class="grid3" id="aide-feelings-options"></div>
       </div>
       <div class="aide-sec">
         <h4>עזרה שנתתי <span class="count" id="assist-count">0</span></h4>
@@ -281,7 +271,7 @@
       <h1>המפגש נשמר</h1>
       <div id="done-body"></div>
       <div class="row">
-        <button class="btn btn-ghost no-print" id="btn-done-pdf" type="button">הורדת סיכום המפגש כ-PDF</button>
+        <button class="btn btn-ghost no-print" id="btn-done-pdf" type="button">שמירת סיכום המפגש כ-PDF</button>
         <button class="btn" id="btn-done-report" type="button">לדוח ההתקדמות</button>
         <button class="btn btn-ghost" data-go="home" type="button">למסך הבית</button>
       </div>
@@ -362,14 +352,13 @@
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
 <script src="js/dsp.js?v=20261024-sibilance-fix"></script>
 <script src="js/audio.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/levels.js"></script>
 <script src="js/goals.js"></script>
-<script src="js/pdf.js"></script>
-<script src="js/tombi.js?v=20261024-2530-brow-texture-lids"></script>
+<script src="js/pdf.js?v=20261025-native-print"></script>
+<script src="js/tombi.js?v=20261024-mouth-layer-fix"></script>
 <script src="js/tasks/registry.js"></script>
 <script src="js/tasks/wake-up.js"></script>
 <script src="js/tasks/engine.js"></script>
@@ -377,7 +366,7 @@
 <script src="js/tasks/loudness.js"></script>
 <script src="js/tasks/magic.js"></script>
 <script src="js/tasks/snake.js"></script>
-<script src="js/tasks/activity-support.js"></script>
+<script src="js/tasks/activity-support.js?v=20261025-ot-engine"></script>
 <script src="js/tasks/stomp-freeze.js"></script>
 <script src="js/tasks/jumps.js"></script>
 <script src="js/tasks/reverse-drum.js"></script>
@@ -386,13 +375,17 @@
 <script src="js/tasks/ball.js"></script>
 <script src="js/tasks/elephant-mouse.js"></script>
 <script src="js/tasks/march.js"></script>
+<script src="js/tasks/ot-engine.js?v=20261025-ot-engine"></script>
+<script src="js/tasks/crystal-tower.js?v=20261025-ot-engine"></script>
+<script src="js/tasks/calming-potion.js?v=20261025-ot-engine"></script>
+<script src="js/tasks/emotion-guess.js?v=20261025-ot-engine"></script>
 <script src="js/lines.js"></script>
 <script src="js/planner.js"></script>
-<script src="js/stages.js"></script>
-<script src="js/report.js"></script>
+<script src="js/stages.js?v=20261025-ot-engine"></script>
+<script src="js/report.js?v=20261025-ot-engine"></script>
 <script src="js/cloud-config.js"></script>
 <script src="js/cloud-auth.js"></script>
 <script src="js/cloud-sync.js"></script>
-<script src="js/app.js"></script>
+<script src="js/app.js?v=20261025-ot-engine"></script>
 </body>
 </html>

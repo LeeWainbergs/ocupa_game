@@ -1,5 +1,5 @@
 /* storage.js — ילדים, מפגשים והגדרות. נשמר רק בדפדפן הזה (localStorage).
-   אין כאן אודיו: רק מספרים, וכן "טביעות קול" (MFCC) של 3 המילים לזיהוי צב/דג/קוף. */
+   לא נשמר אודיו גולמי, אלא נתוני מפגש ומאפייני קול מספריים. */
 T.store = (() => {
   const parentChildId = new URLSearchParams(window.location.search).get('parent');
   const KEY = parentChildId ? `tombi.parent.v1.${encodeURIComponent(parentChildId)}` : 'tombi.v1';
@@ -56,16 +56,6 @@ T.store = (() => {
   }
   function removeSession(id) { data.sessions = data.sessions.filter((s) => s.id !== id); save(); }
 
-  function addTemplate(childId, word, feats) {
-    const c = getChild(childId);
-    if (!c || !feats || feats.length < 5) return;
-    c.templates = c.templates || {};
-    const list = (c.templates[word] = c.templates[word] || []);
-    list.push(feats);
-    while (list.length > 4) list.shift();
-    save();
-  }
-
   function setSoundCentroids(childId, centroids) {
     const child = getChild(childId);
     if (!child) throw new Error(`Unknown child: ${childId}`);
@@ -98,7 +88,7 @@ T.store = (() => {
 
   return {
     load, save, uid, addChild, updateChild, removeChild, getChild, sessionsOf, addSession, mergeSyncedSession, removeSession,
-    addTemplate, setSoundCentroids, exportJSON, importJSON,
+    setSoundCentroids, exportJSON, importJSON,
     get data() { return data; }, get settings() { return data.settings; }, get memoryOnly() { return memoryOnly; },
   };
 })();

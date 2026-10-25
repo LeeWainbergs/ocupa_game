@@ -8,8 +8,8 @@ T.tasks.register({
     return T.levels.params('march', level, { ...child, age });
   },
   async run(ctx, p) {
-    const count = p.short ? Math.max(4, Math.ceil(p.count * 0.6)) : p.count;
-    const continuationCount = p.short ? 4 : 8;
+    const count = p.short ? Math.max(8, Math.ceil(p.count * 0.6)) : p.count;
+    const continuationCount = p.short ? 8 : 12;
     const isAntiPhase = !!p.antiPhase && p.age >= 5;
     const suffix = `${ctx.child.gender}_${ctx.nonverbal ? 'nv' : 'v'}`;
     const line = (key) => T.activity.line(key, ctx);
@@ -20,6 +20,15 @@ T.tasks.register({
     const practice = p.isNew
       ? await T.activity.practice(ctx, () => isAntiPhase ? T.audio.sim.clap(250, 0.42) : T.audio.sim.stomp(250, 0.42), { minIoiMs: 220, minAboveFloor: 9 })
       : null;
+    await ctx.say(line('march_try'), `march_free_${suffix}`);
+    const freeMarchDurationMs = p.short ? 6000 : 10000;
+    const freeEvents = await T.activity.collect(ctx, {
+      durationMs: freeMarchDurationMs, minIoiMs: 220, minAboveFloor: 9,
+      simulate: () => T.tasks.get('march').simulate({ phase: 'free', durationMs: freeMarchDurationMs, ibi: p.ibi }),
+    });
+    const spontaneousSteps = freeEvents.filter((event) => event.cls === 'stomp');
+    const spontaneousIntervals = spontaneousSteps.slice(1).map((event, index) => event.t - spontaneousSteps[index].t);
+    const spontaneousIbiMs = spontaneousIntervals.length ? medianOf(spontaneousIntervals) : null;
     if (p.level >= 4) await ctx.say(line('march_shift'), `march_shift_${suffix}`);
     const syncOffsets = [], syncIbis = [];
     let offsetMs = 250, ibi = p.ibi;
@@ -37,14 +46,13 @@ T.tasks.register({
         phase: 'sync', offsets: syncOffsets, ibis: syncIbis, antiPhase: isAntiPhase, ibi: p.ibi,
       }),
     });
-
     await ctx.say(line('march_tired'), `march_tired_${suffix}`);
-    const continuationStart = T.audio.now();
+    await ctx.say(line('march_tired'), `march_tired_${suffix}`);
     const continuationEvents = await T.activity.collect(ctx, {
       durationMs: continuationCount * ibi + 1000, minIoiMs: 220, minAboveFloor: 9,
       simulate: () => T.tasks.get('march').simulate({ phase: 'continue', count: continuationCount, ibi, antiPhase: isAntiPhase }),
     });
-    const allEvents = [...syncEvents, ...continuationEvents];
+    const allEvents = [...freeEvents, ...syncEvents, ...continuationEvents];
     const responseClass = isAntiPhase ? 'clap' : 'stomp';
     const syncSteps = syncEvents.filter((event) => event.cls === responseClass);
     const continuedSteps = continuationEvents.filter((event) => event.cls === responseClass);
@@ -101,6 +109,7 @@ T.tasks.register({
       meanAsynchronyMs: phaseObservations.length
         ? (targetPhase + Math.atan2(vectorY, vectorX)) * expectedMedianIbi / (2 * Math.PI) : null,
       targetPhaseRad: targetPhase, hitPercent, rayleighP,
+      freeMarchSteps: spontaneousSteps.length, spontaneousIbiMs,
       continuationSteps: continuedSteps.length, continuationDriftMsPerStep: drift,
       tempoShiftMs: p.tempoShiftMs || 0,
       tempoRecoverySteps: recoveredAt < 0 ? null : recoveredAt + 1,
@@ -108,6 +117,11 @@ T.tasks.register({
     });
   },
   simulate(p = {}) {
+    if (p.phase === 'free') {
+      const interval = p.ibi || 500;
+      for (let offset = 250; offset < p.durationMs; offset += interval) T.audio.sim.stomp(offset, 0.48);
+      return;
+    }
     if (!p.phase) {
       for (let index = 0; index < (p.count || 8) + (p.continuationCount || 8); index++) {
         T.audio.sim.stomp(250 + index * (p.ibi || 500), 0.48);

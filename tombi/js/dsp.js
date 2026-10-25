@@ -152,25 +152,6 @@ T.dsp = (() => {
     return prev[m] / (prevLen[m] || 1);
   }
 
-  // Energy share above 3.5 kHz in the first 100 ms: high for "צב" (ts-), low for "דג"/"קוף"
-  function onsetSibilance(sig) {
-    const n = Math.min(sig.length, 1600);
-    if (n < 512) return 0;
-    const re = new Float32Array(512), im = new Float32Array(512);
-    let hiE = 0, allE = 0;
-    for (let start = 0; start + 512 <= n; start += 256) {
-      re.fill(0); im.fill(0);
-      for (let i = 0; i < 512; i++) re[i] = sig[start + i] * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / 511));
-      fft(re, im);
-      for (let k = 1; k <= 256; k++) {
-        const p = re[k] * re[k] + im[k] * im[k];
-        allE += p;
-        if (k * (SR / 512) > 3500) hiE += p;
-      }
-    }
-    return allE ? hiE / allE : 0;
-  }
-
   const ONSET_NFFT = 512;
   const onsetWindow = Float32Array.from({ length: ONSET_NFFT }, (_, i) =>
     0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (ONSET_NFFT - 1)));
@@ -408,7 +389,7 @@ T.dsp = (() => {
   }
 
   return {
-    fft, pitch, mfcc, dtw, onsetSibilance, SR, onsetBands, onsetFlux,
+    fft, pitch, mfcc, dtw, SR, onsetBands, onsetFlux,
     adaptiveOnsetThreshold, onsetFeatures, sibilanceFeatures, normalizeOnsetFeatures, classifyOnset,
     peakPick, acceptOnset, isTimeGated, mergeLandings, ballFell,
   };

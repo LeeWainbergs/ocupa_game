@@ -4,10 +4,10 @@ T.tasks.register({
   slot: 'transition', arousal: -1, gross: true, jump: false,
   needs: { space: 1, hardFloor: true, standing: true, object: null, quietRoom: false },
   modes: ['verbal', 'nonverbal'], minAge: 3, durationSec: { short: 35, full: 55 }, levels: 5,
-  params(level = 1, age = 5, child = {}) { return { level, age, seated: child.canStand === false, phaseMs: level > 2 ? 6000 : 4500 }; },
+  params(level = 1, age = 5, child = {}) { return { level, age, seated: child.canStand === false, phaseMs: level > 2 ? 18000 : 14000 }; },
   run(ctx, p) {
     return (async () => {
-      const phaseMs = p.short ? Math.min(3500, p.phaseMs) : p.phaseMs;
+      const phaseMs = p.short ? Math.min(10000, p.phaseMs) : p.phaseMs;
       await T.activity.start(ctx, { title: 'צב וארנב', picture: 'animals', intro: 'turtle_intro', instruction: 'turtle_go' });
       const practice = p.isNew ? await T.activity.practice(ctx, () => T.audio.sim.stomp(250, 0.42), { minIoiMs: 220, minAboveFloor: 9 }) : null;
       const started = T.audio.now();
@@ -34,9 +34,12 @@ T.tasks.register({
     })();
   },
   simulate(p) {
-    for (let i = 0; i < 9; i++) T.audio.sim.stomp(200 + i * 360, 0.48);
-    const interval = p.short ? 650 : 850;
-    for (let i = 0; i < 6; i++) T.audio.sim.stomp(p.phaseMs + 300 + i * interval, 0.42);
+    const fastInterval = 360;
+    const fastCount = Math.max(9, Math.floor(p.phaseMs / fastInterval));
+    for (let i = 0; i < fastCount; i++) T.audio.sim.stomp(200 + i * fastInterval, 0.48);
+    const slowInterval = 850;
+    const slowCount = Math.max(6, Math.floor(p.phaseMs / slowInterval));
+    for (let i = 0; i < slowCount; i++) T.audio.sim.stomp(p.phaseMs + 300 + i * slowInterval, 0.42);
   },
   version: 1,
 });
