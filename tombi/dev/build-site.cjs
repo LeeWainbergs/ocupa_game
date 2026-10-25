@@ -16,6 +16,16 @@ function buildSite(output) {
     recursive: true,
     filter: (file) => !['dev', 'docs', 'README.md'].includes(path.relative(source, file).split(path.sep)[0]),
   });
+  function normalizeText(directory) {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const file = path.join(directory, entry.name);
+      if (entry.isDirectory()) normalizeText(file);
+      else if (/\.(?:html|css|js|json|svg)$/.test(entry.name)) {
+        fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n'));
+      }
+    }
+  }
+  normalizeText(destination);
   for (const name of ['index.html', 'parent.html']) {
     const target = path.join(destination, name);
     const html = fs.readFileSync(target, 'utf8').replace(
