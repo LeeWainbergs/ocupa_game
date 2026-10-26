@@ -144,6 +144,9 @@ body.tombi-parent-mode #screen-prep .wrap { max-width: 780px; margin: 0 auto; }
 .parent-children > p { margin: 0; padding: 1rem 1.1rem; border: 1px dashed #b9d2c8; border-radius: 16px; background: var(--parent-paper); color: var(--parent-muted); }
 .parent-logout { display: block; margin: 1rem 0 0 auto; padding: .35rem .2rem; border: 0; background: transparent; color: var(--parent-muted); font: inherit; font-size: .9rem; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .parent-logout:hover { color: var(--parent-forest); }
+.parent-delete-button { display: block; margin: .9rem 0 0 auto; padding: .35rem .2rem; border: 0; background: transparent; color: #a53636; font: inherit; font-size: .88rem; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.parent-delete-button:hover { color: #7d2424; }
+.parent-delete-button:disabled { opacity: .6; cursor: wait; }
 .parent-privacy { display: flex; align-items: flex-start; gap: .55rem; margin: 1.25rem 0 0; padding-top: 1rem; border-top: 1px solid #eaf0ed; color: #687873; font-size: .85rem; line-height: 1.6; }
 .parent-privacy svg { flex: 0 0 19px; width: 19px; height: 19px; margin-top: .15rem; color: var(--parent-moss); }
 .parent-portal__footer { margin: .9rem 0 0; color: #74827d; font-size: .88rem; text-align: center; }

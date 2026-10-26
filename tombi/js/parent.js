@@ -20,12 +20,22 @@
     message.classList.toggle('is-error', error);
   };
 
+  function secureApiBase() {
+    let url;
+    try { url = new URL(apiBase); } catch (error) { throw new Error('כתובת שירות הענן אינה תקינה.'); }
+    const localHost = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    if (url.protocol !== 'https:' && !(localHost && url.protocol === 'http:')) {
+      throw new Error('התחברות וסנכרון דורשים חיבור HTTPS מאובטח.');
+    }
+    return apiBase;
+  }
+
   async function request(path, init = {}) {
     if (!apiBase) throw new Error('החיבור לענן עדיין לא הוגדר. פנו לצוות.');
     const freshToken = window.TOMBI_AUTH ? await window.TOMBI_AUTH.getIdToken() : '';
     authToken = freshToken;
     if (!authToken) throw new Error('צריך להתחבר לחשבון כדי להמשיך.');
-    const response = await fetch(`${apiBase}${path}`, {
+    const response = await fetch(`${secureApiBase()}${path}`, {
       ...init,
       headers: {
         ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
@@ -54,6 +64,7 @@
       soundSensitive: Boolean(profile.soundSensitive),
       excludedTasks: profile.excludedTasks || [],
       pinnedTasks: profile.pinnedTasks || [],
+      steps: profile.steps || {},
       levels: profile.levels || {},
       levelLock: profile.levelLock || {},
       templates: {},
@@ -88,7 +99,10 @@
     old.sessions = [...old.sessions.filter((session) => !session.cloudSessionId), ...sessions];
     old.settings = old.settings || {};
     localStorage.setItem(storeKey, JSON.stringify(old));
-    sessionStorage.setItem(`tombi.parent.levels.${child.game_child_id}`, JSON.stringify(gameChild.levels));
+    sessionStorage.setItem(`tombi.parent.levels.${child.game_child_id}`, JSON.stringify({
+      steps: gameChild.steps,
+      levels: gameChild.levels,
+    }));
   }
 
   function launchPreviewGame() {
@@ -163,6 +177,7 @@
       return { ...child, sessions };
     }));
     children.innerHTML = withSessions.map((child) => {
+      localStorage.removeItem(`tombi.parent.deleted.${encodeURIComponent(child.game_child_id)}`);
       const approvedSessions = child.sessions.filter((session) => session.review_status === 'approved');
       saveParentProfile(child, approvedSessions);
       const rows = child.sessions.slice(0, 5).map((session) =>
@@ -179,6 +194,7 @@
         </section>
         <h3>מפגשים אחרונים</h3>
         ${rows ? `<ul>${rows}</ul>` : '<p>עדיין אין מפגשים.</p>'}
+        <button class="parent-delete-button" data-delete-game-data="${escapeHtml(child.game_child_id)}" type="button">מחיקת נתוני המשחק בענן</button>
       </article>`;
     }).join('');
     children.querySelectorAll('[data-play]').forEach((button) => {
@@ -187,7 +203,40 @@
         window.location.href = `index.html?parent=${encodeURIComponent(childId)}`;
       });
     });
+    children.querySelectorAll('[data-delete-game-data]').forEach((button) => {
+      button.addEventListener('click', () => deleteChildGameData(button));
+    });
     setMessage('התחברת בהצלחה. ההתקדמות תופיע לצוות לאחר סנכרון ובדיקה.');
+  }
+
+  async function deleteChildGameData(button) {
+    const childId = button.dataset.deleteGameData;
+    if (!window.confirm('למחוק ממסד הנתונים הפעיל את פרופיל המשחק, כל המפגשים, ההזמנות והקישורים של הילד/ה? המחיקה תשפיע על כל ההורים ואנשי הצוות המקושרים. התיק הקליני הראשי לא יימחק. עותקים מקומיים בדפדפנים של מכשירים אחרים אינם נמחקים מרחוק; יש למחוק אותם בכל מכשיר בנפרד. קובצי גיבוי שהורדו ועותקים בגיבויי השרת אינם נמחקים בפעולה זו.')) return;
+    button.disabled = true;
+    try {
+      await request(`/v1/game/children/${encodeURIComponent(childId)}/data`, { method: 'DELETE' });
+    } catch (error) {
+      setMessage(error.message || 'מחיקת נתוני המשחק נכשלה. הנתונים לא נמחקו.', true);
+      button.disabled = false;
+      return;
+    }
+    try {
+      const storeKey = `tombi.parent.v1.${encodeURIComponent(childId)}`;
+      localStorage.setItem(`tombi.parent.deleted.${encodeURIComponent(childId)}`, '1');
+      localStorage.removeItem(storeKey);
+      sessionStorage.removeItem(`tombi.parent.levels.${childId}`);
+    } catch (error) {
+      setMessage('נתוני המשחק נמחקו מהשרת, אך ניקוי העותק המקומי לא הושלם. סגרו את המשחק במכשיר ובקשו סיוע בניקוי הדפדפן.', true);
+      button.disabled = false;
+      return;
+    }
+    setMessage('נתוני המשחק והקישורים נמחקו. התיק הקליני הראשי נשאר ללא שינוי.');
+    try {
+      await showChildren();
+    } catch (error) {
+      setMessage('נתוני המשחק נמחקו, אך לא ניתן לרענן את רשימת הילדים. טענו מחדש את הדף.', true);
+      button.disabled = false;
+    }
   }
 
   async function handleToken(token) {

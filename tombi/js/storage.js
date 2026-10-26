@@ -3,18 +3,40 @@
 T.store = (() => {
   const parentChildId = new URLSearchParams(window.location.search).get('parent');
   const KEY = parentChildId ? `tombi.parent.v1.${encodeURIComponent(parentChildId)}` : 'tombi.v1';
+  const DELETED_KEY = parentChildId ? `tombi.parent.deleted.${encodeURIComponent(parentChildId)}` : '';
   let data = { children: [], sessions: [], settings: {} };
   let memoryOnly = false;
 
   function load() {
     try {
+      if (DELETED_KEY && localStorage.getItem(DELETED_KEY)) {
+        data = { children: [], sessions: [], settings: {} };
+        return data;
+      }
       const raw = localStorage.getItem(KEY);
       if (raw) data = Object.assign({ children: [], sessions: [], settings: {} }, JSON.parse(raw));
     } catch (e) { memoryOnly = true; }
     return data;
   }
   function save() {
-    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { memoryOnly = true; }
+    try {
+      if (DELETED_KEY && localStorage.getItem(DELETED_KEY)) {
+        data = { children: [], sessions: [], settings: {} };
+        localStorage.removeItem(KEY);
+        return;
+      }
+      localStorage.setItem(KEY, JSON.stringify(data));
+    } catch (e) { memoryOnly = true; }
+  }
+  function clear() {
+    localStorage.removeItem(KEY);
+    data = { children: [], sessions: [], settings: {} };
+    memoryOnly = false;
+  }
+  function markDeleted() {
+    if (!DELETED_KEY) throw new Error('A child-specific profile is required to mark game data as deleted');
+    localStorage.setItem(DELETED_KEY, '1');
+    clear();
   }
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
@@ -22,6 +44,9 @@ T.store = (() => {
     const child = Object.assign({
       id: uid(), name: '', age: 5, gender: 'm', nonverbal: false, templates: {}, soundCentroids: {}, createdAt: Date.now(),
       canJump: true, canStand: true, soundSensitive: false, excludedTasks: [], pinnedTasks: [],
+      calmOpener: 'fire',
+      story: { season: 1, chapter: 1, lit: [], scales: 0, bests: {}, favoriteChapter: null, repeatFavourite: false },
+      steps: {},
       levels: { echo: 1, loudness: 1, magic: 1, snake: 1 },
       levelLock: { echo: false, loudness: false, magic: false, snake: false },
     }, c);
@@ -87,8 +112,13 @@ T.store = (() => {
   }
 
   return {
-    load, save, uid, addChild, updateChild, removeChild, getChild, sessionsOf, addSession, mergeSyncedSession, removeSession,
+    load, save, clear, markDeleted, uid, addChild, updateChild, removeChild, getChild, sessionsOf, addSession, mergeSyncedSession, removeSession,
     setSoundCentroids, exportJSON, importJSON,
     get data() { return data; }, get settings() { return data.settings; }, get memoryOnly() { return memoryOnly; },
+    get deleted() {
+      try { return Boolean(DELETED_KEY && localStorage.getItem(DELETED_KEY)); }
+      catch (e) { memoryOnly = true; return false; }
+    },
+    get deletedKey() { return DELETED_KEY; },
   };
 })();

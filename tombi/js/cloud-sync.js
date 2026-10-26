@@ -12,6 +12,16 @@ T.sync = (() => {
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[character]));
   const apiBase = () => String(config.apiBaseUrl || '').replace(/\/+$/, '');
+  function secureApiBase() {
+    const base = apiBase();
+    let url;
+    try { url = new URL(base); } catch (error) { throw new Error('כתובת ה-API אינה תקינה.'); }
+    const localHost = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    if (url.protocol !== 'https:' && !(localHost && url.protocol === 'http:')) {
+      throw new Error('סנכרון דורש חיבור HTTPS מאובטח.');
+    }
+    return base;
+  }
   const clientReady = () => {
     const firebase = config.firebaseConfig || {};
     return Boolean(apiBase() && firebase.apiKey && firebase.authDomain && firebase.projectId && firebase.appId);
@@ -37,7 +47,7 @@ T.sync = (() => {
     const freshToken = window.TOMBI_AUTH ? await window.TOMBI_AUTH.getIdToken() : '';
     token = freshToken;
     if (!token) throw new Error('צריך להתחבר לחשבון כדי לסנכרן.');
-    const response = await fetch(`${apiBase()}${path}`, {
+    const response = await fetch(`${secureApiBase()}${path}`, {
       ...init,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -102,15 +112,29 @@ T.sync = (() => {
     };
   }
 
-  function resetParentLevels() {
+  function resetParentLevels(session) {
     if (!parentMode) return;
     try {
-      const savedLevels = sessionStorage.getItem(`tombi.parent.levels.${parentChildId}`);
+      const storageKey = `tombi.parent.levels.${parentChildId}`;
+      const child = T.store.getChild(parentChildId);
+      if (child && Array.isArray(session && session.levelChanges) && session.levelChanges.length) {
+        sessionStorage.setItem(storageKey, JSON.stringify({
+          steps: child.steps || {},
+          levels: child.levels || {},
+        }));
+        return;
+      }
+      const savedLevels = sessionStorage.getItem(storageKey);
       if (savedLevels === null) return;
       const approved = JSON.parse(savedLevels);
-      const child = T.store.getChild(parentChildId);
       if (child && approved && typeof approved === 'object' && !Array.isArray(approved)) {
-        child.levels = { ...approved };
+        if (approved.steps || approved.levels) {
+          child.steps = { ...(approved.steps || {}) };
+          child.levels = { ...(approved.levels || {}) };
+        } else {
+          child.steps = {};
+          child.levels = { ...approved };
+        }
         T.store.save();
       }
     } catch (error) {
@@ -138,13 +162,12 @@ T.sync = (() => {
   }
 
   async function sessionAdded(session) {
-    if (parentMode) resetParentLevels();
     try {
       await pushSession(session);
-      if (parentMode) resetParentLevels();
+      if (parentMode) resetParentLevels(session);
     } catch (error) {
       setStatus(error.message || 'סנכרון המפגש נכשל. הנתונים נשמרו בדפדפן וינוסו שוב.', true);
-      if (parentMode) resetParentLevels();
+      if (parentMode) resetParentLevels(session);
     }
   }
 
@@ -245,7 +268,8 @@ T.sync = (() => {
     const patientOptions = staffPatients.map((patient) =>
       `<option value="${escapeHtml(patient.patient_id)}" data-code="${escapeHtml(patient.patient_code)}">${escapeHtml(patient.display_name || `תיק ${patient.patient_code}`)}${patient.linked_game_child_id ? ' · מקושר' : ''}</option>`).join('');
     panel.innerHTML = `<h2 id="cloud-sync-title">סנכרון מאובטח</h2>
-      <p>הנתונים מסונכרנים רק לאחר התחברות. נשלחים ציוני משימות ומשך מפגש בלבד — לא הקלטות, טביעות קול, תוכניות טיפול או הערות.</p>
+      <p>התחברות נעשית עם Google/Firebase, וכתובת הדוא״ל משמשת לאימות והרשאות. בסנכרון מועברים מזהה פרופיל/תיק, מועד ומשך מפגש, ציונים ונתוני משימות (כולל רמת ביטחון, סיוע פיזי ושינויי רמה). לא נשלחים הקלטות, טביעות קול, תוכניות טיפול או הערות.</p>
+      <p>מחיקה מההגדרות מסירה את העותק המקומי בלבד. כדי למחוק מידע שכבר סונכרן, יש לפנות למנהל/ת המערכת שסיפקה את הגישה.</p>
       <p id="cloud-sync-status" class="cloud-sync-status${statusError ? ' is-error' : ''}" aria-live="polite">${escapeHtml(statusMessage || (token ? 'מחובר/ת לחשבון צוות.' : 'צריך להתחבר לחשבון צוות כדי להמשיך.'))}</p>
       <div class="cloud-sync-actions">
         <button class="btn btn-ghost" id="cloud-sync-login" type="button">${token ? 'התחברות מחדש / החלפת חשבון' : 'התחברות Google לצוות'}</button>
@@ -343,6 +367,7 @@ T.sync = (() => {
       soundSensitive: Boolean(child.soundSensitive),
       excludedTasks: Array.isArray(child.excludedTasks) ? child.excludedTasks : [],
       pinnedTasks: Array.isArray(child.pinnedTasks) ? child.pinnedTasks : [],
+      steps: child.steps || {},
       levels: child.levels || {},
       levelLock: child.levelLock || {},
     };
